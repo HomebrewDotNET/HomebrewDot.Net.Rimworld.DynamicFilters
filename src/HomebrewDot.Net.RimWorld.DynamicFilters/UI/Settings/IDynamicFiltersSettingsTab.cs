@@ -1,0 +1,21 @@
+using UnityEngine;
+
+namespace HomebrewDot.Net.Rimworld.UI.Settings
+{
+    /// <summary>
+    /// Contract for a renderable settings tab in the dynamic filters settings UI.
+    /// </summary>
+    internal interface IDynamicFiltersSettingsTab
+    {
+        /// <summary>
+        /// Label rendered in the tab header.
+        /// </summary>
+        string Title { get; }
+
+        /// <summary>
+        /// Draws the tab content in the provided region.
+        /// </summary>
+        /// <param name="rect">The content area.</param>
+        void Draw(Rect rect);
+    }
+}

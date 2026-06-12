@@ -1,0 +1,97 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+	<PropertyGroup>
+		<TargetFramework>net472</TargetFramework>
+		<AssemblyName>HomebrewDot.Net.Rimworld.DynamicFilters</AssemblyName>
+		<RootNamespace>HomebrewDot.Net.Rimworld</RootNamespace>
+		<Nullable>disable</Nullable>
+		<LangVersion>latestmajor</LangVersion>
+		<AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+		<RimworldVersion Condition="'$(RIMWORLD_VERSION)' == ''">1.6</RimworldVersion>
+		<RimworldVersion Condition="'$(RIMWORLD_VERSION)' != ''">$(RIMWORLD_VERSION)</RimworldVersion>
+		<HarmonyVersion Condition="'$(HARMONY_VERSION)' == ''">1.5</HarmonyVersion>
+		<HarmonyVersion Condition="'$(HARMONY_VERSION)' != ''">$(HARMONY_VERSION)</HarmonyVersion>
+		<RimworldRoot Condition="'$(RIMWORLD_ROOT)' == ''">C:\Program Files (x86)\Steam\steamapps\common\RimWorld</RimworldRoot>
+		<RimworldRoot Condition="'$(RIMWORLD_ROOT)' != ''">$(RIMWORLD_ROOT)</RimworldRoot>
+		<RimworldWorkshopRoot Condition="'$(RIMWORLD_WORKSHOP_ROOT)' == ''">C:\Program Files (x86)\Steam\steamapps\workshop\content\294100</RimworldWorkshopRoot>
+		<RimworldWorkshopRoot Condition="'$(RIMWORLD_WORKSHOP_ROOT)' != ''">$(RIMWORLD_WORKSHOP_ROOT)</RimworldWorkshopRoot>
+		<RimWorldManaged Condition="'$(RIMWORLD_MANAGED)' == ''">$(RimworldRoot)\RimWorldWin64_Data\Managed</RimWorldManaged>
+		<RimWorldManaged Condition="'$(RIMWORLD_MANAGED)' != ''">$(RIMWORLD_MANAGED)</RimWorldManaged>
+		<HarmonyRoot Condition="'$(RIMWORLD_HARMONY_ROOT)' == ''">$(RimworldWorkshopRoot)\2009463077\$(HarmonyVersion)\Assemblies</HarmonyRoot>
+		<HarmonyRoot Condition="'$(RIMWORLD_HARMONY_ROOT)' != ''">$(RIMWORLD_HARMONY_ROOT)</HarmonyRoot>
+		<OutputPath>..\..\$(RimworldVersion)\Assemblies</OutputPath>
+		<RepositoryRoot>$(MSBuildProjectDirectory)\..\..</RepositoryRoot>
+		<RimworldModsRoot Condition="'$(RIMWORLD_MODS_ROOT)' == ''">$(RimworldRoot)\Mods</RimworldModsRoot>
+		<RimworldModsRoot Condition="'$(RIMWORLD_MODS_ROOT)' != ''">$(RIMWORLD_MODS_ROOT)</RimworldModsRoot>
+		<ModTestingFolderName Condition="'$(DYNAMICFILTERS_MOD_TESTING_FOLDER_NAME)' == ''">Homebrewed Dynamic Filters</ModTestingFolderName>
+		<ModTestingFolderName Condition="'$(DYNAMICFILTERS_MOD_TESTING_FOLDER_NAME)' != ''">$(DYNAMICFILTERS_MOD_TESTING_FOLDER_NAME)</ModTestingFolderName>
+		<ModTestingTargetDir>$(RimworldModsRoot)\$(ModTestingFolderName)</ModTestingTargetDir>
+		<ToolkitRoot Condition="'$(RIMWORLD_TOOLKIT_ROOT)' == ''">../../../HomebrewDot.Net.Rimworld.Toolkit/$(RimworldVersion)/Assemblies</ToolkitRoot>
+		<ToolkitRoot Condition="'$(RIMWORLD_TOOLKIT_ROOT)' != ''">$(RIMWORLD_TOOLKIT_ROOT)</ToolkitRoot>
+	</PropertyGroup>
+
+	<ItemGroup>
+		<Reference Include="Assembly-CSharp">
+			<HintPath>$(RimWorldManaged)\Assembly-CSharp.dll</HintPath>
+			<Private>false</Private>
+		</Reference>
+		<Reference Include="UnityEngine.CoreModule">
+			<HintPath>$(RimWorldManaged)\UnityEngine.CoreModule.dll</HintPath>
+			<Private>false</Private>
+		</Reference>
+		<Reference Include="UnityEngine.IMGUIModule">
+			<HintPath>$(RimWorldManaged)\UnityEngine.IMGUIModule.dll</HintPath>
+			<Private>false</Private>
+		</Reference>
+		<Reference Include="0Harmony">
+			<HintPath>$(HarmonyRoot)\0Harmony.dll</HintPath>
+			<Private>false</Private>
+		</Reference>
+		<Reference Include="HomebrewDot.Net.Rimworld.Toolkit">
+			<HintPath>$(ToolkitRoot)\HomebrewDot.Net.Rimworld.Toolkit.dll</HintPath>
+			<Private>false</Private>
+		</Reference>
+	</ItemGroup>
+
+	<Target Name="SyncModContentToModsFolderForTesting" AfterTargets="Build" Condition="Exists('$(RimworldModsRoot)')">
+		<Exec Command="where rsync &gt;nul 2&gt;nul" IgnoreExitCode="true">
+			<Output TaskParameter="ExitCode" PropertyName="RsyncExitCode" />
+		</Exec>
+
+		<Message Text="Skipping mod sync: rsync not found in PATH." Importance="High" Condition="'$(RsyncExitCode)' != '0'" />
+
+		<!-- Normalize paths to resolve .. references -->
+		<PropertyGroup Condition="'$(RsyncExitCode)' == '0'">
+			<RepositoryRootNormalized>$([System.IO.Path]::GetFullPath('$(RepositoryRoot)'))</RepositoryRootNormalized>
+			<ModTestingTargetDirNormalized>$([System.IO.Path]::GetFullPath('$(ModTestingTargetDir)'))</ModTestingTargetDirNormalized>
+			<RepositoryRootIsUNC>$([System.String]::Copy('$(RepositoryRootNormalized)').StartsWith('\\'))</RepositoryRootIsUNC>
+		</PropertyGroup>
+
+		<Message Text="Skipping mod sync: network paths (UNC) are not supported by rsync." Importance="High" Condition="'$(RsyncExitCode)' == '0' and '$(RepositoryRootIsUNC)' == 'True'" />
+
+		<MakeDir Directories="$(ModTestingTargetDir)" Condition="'$(RsyncExitCode)' == '0' and '$(RepositoryRootIsUNC)' != 'True' and !Exists('$(ModTestingTargetDir)')" />
+
+		<!-- Only set up rsync conversion for local drive paths -->
+		<PropertyGroup Condition="'$(RsyncExitCode)' == '0' and '$(RepositoryRootIsUNC)' != 'True'">
+			<RepositoryRootDrive>$([System.String]::Copy('$(RepositoryRootNormalized)').Substring(0,1).ToLowerInvariant())</RepositoryRootDrive>
+			<RepositoryRootTail>$([System.String]::Copy('$(RepositoryRootNormalized)').Substring(2).Replace('\\','/'))</RepositoryRootTail>
+			<RepositoryRootRsync>/cygdrive/$(RepositoryRootDrive)$(RepositoryRootTail)</RepositoryRootRsync>
+
+			<ModTestingTargetDirDrive>$([System.String]::Copy('$(ModTestingTargetDirNormalized)').Substring(0,1).ToLowerInvariant())</ModTestingTargetDirDrive>
+			<ModTestingTargetDirTail>$([System.String]::Copy('$(ModTestingTargetDirNormalized)').Substring(2).Replace('\\','/'))</ModTestingTargetDirTail>
+			<ModTestingTargetDirRsync>/cygdrive/$(ModTestingTargetDirDrive)$(ModTestingTargetDirTail)</ModTestingTargetDirRsync>
+		</PropertyGroup>
+
+		<!-- Core mod metadata and built assemblies -->
+		<Exec Command="rsync -a -q --no-perms --delete --mkpath &quot;$(RepositoryRootRsync)/About/&quot; &quot;$(ModTestingTargetDirRsync)/About/&quot;" Condition="'$(RsyncExitCode)' == '0' and '$(RepositoryRootIsUNC)' != 'True' and Exists('$(RepositoryRootNormalized)\About')" />
+		<Exec Command="rsync -a -q --no-perms --delete --mkpath &quot;$(RepositoryRootRsync)/$(RimworldVersion)/&quot; &quot;$(ModTestingTargetDirRsync)/$(RimworldVersion)/&quot;" Condition="'$(RsyncExitCode)' == '0' and '$(RepositoryRootIsUNC)' != 'True' and Exists('$(RepositoryRootNormalized)\$(RimworldVersion)')" />
+
+		<!-- Optional common mod content folders -->
+		<Exec Command="rsync -a -q --no-perms --delete --mkpath &quot;$(RepositoryRootRsync)/Defs/&quot; &quot;$(ModTestingTargetDirRsync)/Defs/&quot;" Condition="'$(RsyncExitCode)' == '0' and '$(RepositoryRootIsUNC)' != 'True' and Exists('$(RepositoryRootNormalized)\Defs')" />
+		<Exec Command="rsync -a -q --no-perms --delete --mkpath &quot;$(RepositoryRootRsync)/Patches/&quot; &quot;$(ModTestingTargetDirRsync)/Patches/&quot;" Condition="'$(RsyncExitCode)' == '0' and '$(RepositoryRootIsUNC)' != 'True' and Exists('$(RepositoryRootNormalized)\Patches')" />
+		<Exec Command="rsync -a -q --no-perms --delete --mkpath &quot;$(RepositoryRootRsync)/Languages/&quot; &quot;$(ModTestingTargetDirRsync)/Languages/&quot;" Condition="'$(RsyncExitCode)' == '0' and '$(RepositoryRootIsUNC)' != 'True' and Exists('$(RepositoryRootNormalized)\Languages')" />
+		<Exec Command="rsync -a -q --no-perms --delete --mkpath &quot;$(RepositoryRootRsync)/Textures/&quot; &quot;$(ModTestingTargetDirRsync)/Textures/&quot;" Condition="'$(RsyncExitCode)' == '0' and '$(RepositoryRootIsUNC)' != 'True' and Exists('$(RepositoryRootNormalized)\Textures')" />
+		<Exec Command="rsync -a -q --no-perms --delete --mkpath &quot;$(RepositoryRootRsync)/Sounds/&quot; &quot;$(ModTestingTargetDirRsync)/Sounds/&quot;" Condition="'$(RsyncExitCode)' == '0' and '$(RepositoryRootIsUNC)' != 'True' and Exists('$(RepositoryRootNormalized)\Sounds')" />
+	</Target>
+
+</Project>
