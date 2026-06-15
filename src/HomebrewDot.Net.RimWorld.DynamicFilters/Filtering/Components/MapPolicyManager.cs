@@ -346,12 +346,15 @@ namespace HomebrewDot.Net.Rimworld.Filtering.Components
                 if(_filterCache.TryGetValue(filter, out var policyName) && _defFilters.TryGetValue(policyName, out var defFilter))
                 {
                     LogVerbose($"Updating def allow list using policy {policyName} on map {map} for filter {filter}");
+                    var stopwatch = System.Diagnostics.Stopwatch.StartNew();
                     var allDefs = DefDatabase<ThingDef>.AllDefsListForReading;
                     for(int i = 0; i < allDefs.Count; i++)
                     {
                         var def = allDefs[i];
                         Invoking.Safe(() => filter.SetAllow(def, defFilter.Filter(def)));
                     }
+                    stopwatch.Stop();
+                    LogVerbose($"Finished updating def allow list for filter {filter} using policy {policyName} in {stopwatch.ElapsedMilliseconds} ms");
                 }
             }
         }
