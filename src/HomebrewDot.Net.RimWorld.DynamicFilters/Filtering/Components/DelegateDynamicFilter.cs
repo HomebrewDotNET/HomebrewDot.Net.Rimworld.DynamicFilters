@@ -17,7 +17,7 @@ namespace HomebrewDot.Net.Rimworld.Filtering.Components
     {
         // Fields
         private readonly Func<TScope, TItem, bool> _filterFunc;
-        private readonly Action<TScope, IStateStore<TScope>> _updateAction;
+        private readonly Func<TScope, IStateStore<TScope>, bool> _updateFunc;
 
         // Properties
         /// <inheritdoc/>
@@ -29,13 +29,13 @@ namespace HomebrewDot.Net.Rimworld.Filtering.Components
         /// <param name="scope">The scope of the filter.</param>
         /// <param name="policy">The policy of the filter.</param>
         /// <param name="filter">The filter function.</param>
-        /// <param name="update">The update action.</param>
-        public DelegateDynamicFilter(TScope scope, IDynamicPolicy<TScope, TItem> policy, Func<TScope, TItem, bool> filter, Action<TScope, IStateStore<TScope>> update = null)
+        /// <param name="update">The update function.</param>
+        public DelegateDynamicFilter(TScope scope, IDynamicPolicy<TScope, TItem> policy, Func<TScope, TItem, bool> filter, Func<TScope, IStateStore<TScope>, bool> update = null)
         {
             Scope = Guard.NotNull(scope, nameof(scope));
             Policy = Guard.NotNull(policy, nameof(policy));
             _filterFunc = Guard.NotNull(filter, nameof(filter));
-            _updateAction = update;
+            _updateFunc = update;
         }
 
         /// <inheritdoc/>
@@ -44,9 +44,9 @@ namespace HomebrewDot.Net.Rimworld.Filtering.Components
             return _filterFunc(Scope, item);
         }
         /// <inheritdoc/>
-        public void Update(IStateStore<TScope> stateStore)
+        public bool Update(IStateStore<TScope> stateStore)
         {
-            _updateAction?.Invoke(Scope, stateStore);
+            return _updateFunc?.Invoke(Scope, stateStore) ?? false;
         }
     }
 }

@@ -113,7 +113,7 @@ namespace HomebrewDot.Net.RimWorld.DynamicFilters.Tests.Filtering.Components
             var policy = new Mock<IDynamicPolicy<string, int>>().Object;
             Func<string, int, bool> filter = (s, i) => true;
             var updateInvoked = false;
-            Action<string, IStateStore<string>> update = (s, store) => { updateInvoked = true; };
+            Func<string, IStateStore<string>, bool> update = (s, store) => { updateInvoked = true; return true; };
             var dynamicFilter = new DelegateDynamicFilter<string, int>(scope, policy, filter, update);
             var stateStore = new Mock<IStateStore<string>>().Object;
 

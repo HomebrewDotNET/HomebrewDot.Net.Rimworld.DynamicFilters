@@ -33,6 +33,7 @@ namespace HomebrewDot.Net.Rimworld.Filtering
         /// Updates the filter's internal state based on changes to the scope or other relevant factors. This method should be called whenever there is a change in the scope or any other conditions that might affect the filter's behavior, allowing it to adjust its criteria accordingly.
         /// </summary>
         /// <param name="stateStore">A state store that provides access to the current state of the scope.</param>
-        void Update(IStateStore<TScope> stateStore);
+        /// <returns>True if any state changes were detected and the filter was updated; otherwise, false.</returns>
+        bool Update(IStateStore<TScope> stateStore);
     }
 }

@@ -11,6 +11,7 @@ namespace HomebrewDot.Net.Rimworld.UI.Settings.Tabs
     internal sealed class TemplatePolicyEditorPanel
     {
         private const float ButtonsHeight = 34f;
+        private Vector2 _descriptionScroll = Vector2.zero;
 
         internal readonly struct DrawResult
         {
@@ -54,8 +55,17 @@ namespace HomebrewDot.Net.Rimworld.UI.Settings.Tabs
             Widgets.Label(new Rect(innerRect.x, cursorY, innerRect.width, 24f), title);
             cursorY += 26f;
 
-            Widgets.Label(new Rect(innerRect.x, cursorY, innerRect.width, 58f), description);
-            cursorY += 62f;
+            var descNaturalHeight = Text.CalcHeight(description, innerRect.width);
+            var maxDescHeight = Mathf.Floor(innerRect.height * 0.3f);
+            var descHeight = Mathf.Min(descNaturalHeight, maxDescHeight);
+
+            var descOutRect = new Rect(innerRect.x, cursorY, innerRect.width, descHeight);
+            var descViewHeight = Mathf.Max(descNaturalHeight, descHeight);
+            var descViewRect = new Rect(0f, 0f, descOutRect.width - 16f, descViewHeight);
+            Widgets.BeginScrollView(descOutRect, ref _descriptionScroll, descViewRect);
+            Widgets.Label(new Rect(0f, 0f, descViewRect.width, descViewHeight), description);
+            Widgets.EndScrollView();
+            cursorY = descOutRect.yMax + 4f;
 
             var errorsHeight = validationErrors.Length == 0 ? 0f : Mathf.Min(90f, validationErrors.Length * 22f + 4f);
             var settingsRect = new Rect(innerRect.x, cursorY, innerRect.width, Mathf.Max(80f, innerRect.height - (cursorY - innerRect.y) - ButtonsHeight - errorsHeight - 12f));

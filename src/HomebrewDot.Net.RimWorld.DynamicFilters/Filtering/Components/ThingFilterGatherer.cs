@@ -7,6 +7,7 @@ using HarmonyLib;
 using HomebrewDot.Net.Rimworld.Indexing;
 using RimWorld;
 using Verse;
+using Verse.Noise;
 using static HomebrewDot.Net.Rimworld.Toolkit.Helpers;
 
 namespace HomebrewDot.Net.Rimworld.Filtering.Components
@@ -49,6 +50,13 @@ namespace HomebrewDot.Net.Rimworld.Filtering.Components
             postfix = AccessTools.Method(typeof(Patches), nameof(Patches.Postfix_BillStack_AddBill));
             original = AccessTools.Method(typeof(BillStack), nameof(BillStack.AddBill));
             harmony.Patch(original, postfix: new HarmonyMethod(postfix));
+
+            postfix = AccessTools.Method(typeof(Patches), nameof(Patches.Postfix_Building_Storage_Notify_SettingsChanged));
+            original = AccessTools.Method(typeof(Building_Storage), nameof(Building_Storage.Notify_SettingsChanged));
+            harmony.Patch(original, postfix: new HarmonyMethod(postfix));
+            postfix = AccessTools.Method(typeof(Patches), nameof(Patches.Postfix_Building_Storage_Destroy));
+            original = AccessTools.Method(typeof(Building_Storage), nameof(Building_Storage.Destroy));
+            harmony.Patch(original, postfix: new HarmonyMethod(postfix));
         }
         /// <inheritdoc/>
         public void Reset()
@@ -61,6 +69,10 @@ namespace HomebrewDot.Net.Rimworld.Filtering.Components
             original = AccessTools.Method(typeof(BillStack), nameof(BillStack.Delete));
             harmony.Unpatch(original, HarmonyPatchType.Postfix, DynamicFiltersToolkit.Harmony.Id);
             original = AccessTools.Method(typeof(BillStack), nameof(BillStack.AddBill));
+            harmony.Unpatch(original, HarmonyPatchType.Postfix, DynamicFiltersToolkit.Harmony.Id);
+            original = AccessTools.Method(typeof(Building_Storage), nameof(Building_Storage.Notify_SettingsChanged));
+            harmony.Unpatch(original, HarmonyPatchType.Postfix, DynamicFiltersToolkit.Harmony.Id);
+            original = AccessTools.Method(typeof(Building_Storage), nameof(Building_Storage.Destroy));
             harmony.Unpatch(original, HarmonyPatchType.Postfix, DynamicFiltersToolkit.Harmony.Id);
         }
 
@@ -86,10 +98,11 @@ namespace HomebrewDot.Net.Rimworld.Filtering.Components
                     {
                         foreach (var building in map.listerBuildings.allBuildingsColonist)
                         {
-                            if (building is Building_Storage buildingStorage && buildingStorage?.settings?.filter != null)
+                            if (building is Building_Storage buildingStorage)
                             {
-                                var storageId = buildingStorage.GetUniqueLoadID();
-                                SnapshotManager?.Push(buildingStorage.settings.filter, (DynamicFiltersToolkitConstants.ThingFilter.StorageKey, buildingStorage), (DynamicFiltersToolkitConstants.ThingFilter.StorageIdKey, storageId), (nameof(map), map));
+                                var settings = buildingStorage.GetStoreSettings();
+                                var storageId = buildingStorage.storageGroup != null ? buildingStorage.storageGroup.GetUniqueLoadID() : buildingStorage.GetUniqueLoadID();
+                                SnapshotManager?.Push(settings.filter, (DynamicFiltersToolkitConstants.ThingFilter.StorageKey, buildingStorage), (DynamicFiltersToolkitConstants.ThingFilter.StorageIdKey, storageId), (nameof(map), map));
                             }
                             if (building is Building_WorkTable workTable && workTable?.billStack != null)
                             {
@@ -198,6 +211,34 @@ namespace HomebrewDot.Net.Rimworld.Filtering.Components
                 {
                     var storageId = bill.GetUniqueLoadID();
                     SnapshotManager?.Push(thingFilter, (DynamicFiltersToolkitConstants.ThingFilter.StorageIdKey, storageId), (nameof(__instance.billGiver.Map), __instance.billGiver?.Map), (DynamicFiltersToolkitConstants.ThingFilter.StorageKey, bill));
+                }
+            }
+            /// <summary>
+            /// Pushes the <see cref="ThingFilter"/> data to the snapshot manager when a <see cref="Building_Storage"/> has its settings changed.
+            /// </summary>
+            /// <param name="__instance">The instance of the building storage whose settings have changed.</param>
+            public static void Postfix_Building_Storage_Notify_SettingsChanged(Building_Storage __instance)
+            {
+                var settings = __instance.GetStoreSettings();
+                var storageId = __instance.storageGroup != null ? __instance.storageGroup.GetUniqueLoadID() : __instance.GetUniqueLoadID();
+                SnapshotManager?.Push(settings.filter, (DynamicFiltersToolkitConstants.ThingFilter.StorageKey, __instance), (DynamicFiltersToolkitConstants.ThingFilter.StorageIdKey, storageId), (nameof(__instance.Map), __instance.Map));
+            }
+
+            /// <summary>
+            /// Removes the <see cref="ThingFilter"/> data from the snapshot manager when a <see cref="Building_Storage"/> is destroyed.
+            /// </summary>
+            /// <param name="__instance">The instance of the building storage being destroyed.</param>
+            /// <param name="mode">The mode in which the building storage is being destroyed.</param>
+            public static void Postfix_Building_Storage_Destroy(Building_Storage __instance, DestroyMode mode)
+            { 
+                var settings = __instance.GetStoreSettings();
+                var instanceSettings = __instance.settings;
+                var storageId = __instance.storageGroup != null ? __instance.storageGroup.GetUniqueLoadID() : __instance.GetUniqueLoadID();
+                var instanceStorageId = __instance.GetUniqueLoadID();
+                SnapshotManager?.Destroyed(settings.filter, (DynamicFiltersToolkitConstants.ThingFilter.StorageKey, __instance), (DynamicFiltersToolkitConstants.ThingFilter.StorageIdKey, storageId), (nameof(__instance.Map), __instance.Map), (nameof(DestroyMode), mode));
+                if(settings != instanceSettings)
+                {
+                    SnapshotManager?.Destroyed(instanceSettings.filter, (DynamicFiltersToolkitConstants.ThingFilter.StorageKey, __instance), (DynamicFiltersToolkitConstants.ThingFilter.StorageIdKey, instanceStorageId), (nameof(__instance.Map), __instance.Map), (nameof(DestroyMode), mode));
                 }
             }
         }

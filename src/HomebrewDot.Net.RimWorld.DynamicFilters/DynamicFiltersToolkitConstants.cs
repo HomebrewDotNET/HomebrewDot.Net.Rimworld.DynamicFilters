@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using HomebrewDot.Net.Rimworld.Indexing;
 
 namespace HomebrewDot.Net.Rimworld
 {
@@ -36,6 +37,29 @@ namespace HomebrewDot.Net.Rimworld
             /// Metadata key that stores the storage holder of a <see cref="Verse.ThingFilter"/>.
             /// </summary>
             public const string StorageKey = "DynamicFilters.Storage";
+        }
+
+        /// <summary>
+        /// Constants related to <see cref="Verse.Def"/>s.
+        /// </summary>
+        public static class  Def
+        {
+            /// <summary>
+            /// Constants related to <see cref="Verse.ThingDef"/>s.
+            /// </summary>
+            public static class Thing
+            {
+                /// <summary>
+                /// The metadata key used to retrieve whether a <see cref="Verse.ThingDef"/> is considered explosive for the purposes of the built-in explosive filter policy.
+                /// Used as input to <see cref="IIndexed{T}.GetValue{TValue}(string)"/>
+                /// </summary>
+                public const string IsExplosiveMetadataKey = "IsExplosive";
+                /// <summary>
+                /// The metadata key used to retrieve whether a <see cref="Verse.ThingDef"/> is considered flammable for the purposes of the built-in flammable filter policy.
+                /// Used as input to <see cref="IIndexed{T}.GetValue{TValue}(string)"/>
+                /// </summary>
+                public const string IsFlammableMetadataKey = "IsFlammable";
+            }
         }
     }
 }

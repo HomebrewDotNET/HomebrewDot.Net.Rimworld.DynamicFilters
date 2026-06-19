@@ -53,7 +53,12 @@ namespace HomebrewDot.Net.Rimworld.Filtering.Components
         {
 
         }
-        /// <inheritdoc/>
+        /// <summary>
+        /// Associates the given <see cref="ThingFilter"/> with the specified policy name, allowing it to be managed and updated according to that policy. This method checks if the policy is active on this map, and if the filter is properly indexed. If the filter is already managed by another policy, it will be unmanaged before being assigned to the new policy. Returns true if the filter is successfully managed with the policy, false otherwise.
+        /// </summary>
+        /// <param name="filter">The filter to be managed.</param>
+        /// <param name="policyName">The name of the policy to manage the filter with.</param>
+        /// <returns>True if the filter is successfully managed with the policy, false otherwise.</returns>
         public bool ManageWith(ThingFilter filter, string policyName)
         {
             filter = Guard.NotNull(filter, nameof(filter));
@@ -92,7 +97,7 @@ namespace HomebrewDot.Net.Rimworld.Filtering.Components
                     _filterToPolicyMap[storageId] = policyName;
                     _filterCache[filter] = policyName;
                     Log($"Filter {filter} on {storageId} is now managed by policy {policyName}");
-                    MaintainActivePolicies();
+                    MaintainActivePolicies(true);
                     return true;
                 }
             }
@@ -102,6 +107,10 @@ namespace HomebrewDot.Net.Rimworld.Filtering.Components
                 return false;
             }
         }
+        /// <summary>
+        /// Removes any association between the given <see cref="ThingFilter"/> and any policy that may be managing it. This method checks if the filter is indexed and currently managed by a policy, and if so, it removes the association and updates the internal state accordingly. If the filter is not indexed or not currently managed, it logs a verbose message and takes no action.
+        /// </summary>
+        /// <param name="filter">The filter to be unmanaged.</param>
         public void Unmanage(ThingFilter filter)
         {
             filter = Guard.NotNull(filter, nameof(filter));
@@ -317,7 +326,7 @@ namespace HomebrewDot.Net.Rimworld.Filtering.Components
             return false;
         }
 
-        private void MaintainActivePolicies()
+        private void MaintainActivePolicies(bool force = false)
         {
             ThingFilter[] activeFilters;
             lock (_lock)
@@ -345,16 +354,21 @@ namespace HomebrewDot.Net.Rimworld.Filtering.Components
 
                 if(_filterCache.TryGetValue(filter, out var policyName) && _defFilters.TryGetValue(policyName, out var defFilter))
                 {
-                    LogVerbose($"Updating def allow list using policy {policyName} on map {map} for filter {filter}");
-                    var stopwatch = System.Diagnostics.Stopwatch.StartNew();
-                    var allDefs = DefDatabase<ThingDef>.AllDefsListForReading;
-                    for(int i = 0; i < allDefs.Count; i++)
+                    var wasUpdated = Invoking.Safe(() => defFilter.Update(StateStore.GetChildStore(map)), false);
+
+                    if (wasUpdated || force)
                     {
-                        var def = allDefs[i];
-                        Invoking.Safe(() => filter.SetAllow(def, defFilter.Filter(def)));
+                        LogVerbose($"Updating def allow list using policy {policyName} on map {map} for filter {filter}");
+                        var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+                        var allDefs = DefDatabase<ThingDef>.AllDefsListForReading;
+                        for (int i = 0; i < allDefs.Count; i++)
+                        {
+                            var def = allDefs[i];
+                            Invoking.Safe(() => filter.SetAllow(def, defFilter.Filter(def)));
+                        }
+                        stopwatch.Stop();
+                        LogVerbose($"Finished updating def allow list for filter {filter} using policy {policyName} in {stopwatch.ElapsedMilliseconds} ms");
                     }
-                    stopwatch.Stop();
-                    LogVerbose($"Finished updating def allow list for filter {filter} using policy {policyName} in {stopwatch.ElapsedMilliseconds} ms");
                 }
             }
         }
@@ -427,10 +441,6 @@ namespace HomebrewDot.Net.Rimworld.Filtering.Components
                     {
                         Invoking.Safe(() => filter.Update(StateStore.GetChildStore(map)));
                     }
-                    foreach (var defFilter in _defFilters.Values)
-                    {
-                        Invoking.Safe(() => defFilter.Update(StateStore.GetChildStore(map)));
-                    }
                 }
                 MaintainActivePolicies();
                 return true;
@@ -450,7 +460,6 @@ namespace HomebrewDot.Net.Rimworld.Filtering.Components
                     {
                         var filter = thingPolicy.GetFilter(map);
                         _thingFilters[policyName] = filter;
-                        filter.Update(StateStore.GetChildStore(map));
                         Log($"Activated policy filter {policyName} for map {map}");
                     });
                 }
@@ -461,10 +470,10 @@ namespace HomebrewDot.Net.Rimworld.Filtering.Components
                     {
                         var filter = defPolicy.GetFilter(map);
                         _defFilters[policyName] = filter;
-                        filter.Update(StateStore.GetChildStore(map));
                         Log($"Activated policy filter {policyName} for map {map}");
                     });
                 }
+                MaintainActivePolicies(true);
             }
         }
 

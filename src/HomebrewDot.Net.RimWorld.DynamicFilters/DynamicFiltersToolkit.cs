@@ -25,6 +25,10 @@ using HomebrewDot.Net.Rimworld.Storage.Models;
 using HomebrewDot.Net.Rimworld.UI.Settings;
 using HomebrewDot.Net.Rimworld.Policies;
 using HomebrewDot.Net.Rimworld.Hooks.Triggers;
+using RimWorld;
+using HomebrewDot.Net.Rimworld.UI;
+using HomebrewDot.Net.Rimworld.UI.Components;
+using HomebrewDot.Net.Rimworld.Referencing.Components;
 
 namespace HomebrewDot.Net.Rimworld
 {
