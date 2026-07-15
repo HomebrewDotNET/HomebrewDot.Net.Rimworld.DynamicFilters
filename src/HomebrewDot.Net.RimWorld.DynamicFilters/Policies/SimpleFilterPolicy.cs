@@ -113,6 +113,9 @@ namespace HomebrewDot.Net.Rimworld.Policies
             var thingDefRect = new Rect(rect.x, cursorY, rect.width, 24f);
             Widgets.CheckboxLabeled(thingDefRect, "ForThingDef", ref typedSettings.ThingDef);
             cursorY = thingDefRect.yMax + 6f;
+            var disallowRect = new Rect(rect.x, cursorY, rect.width, 24f);
+            Widgets.CheckboxLabeled(disallowRect, "Disallow Matching", ref typedSettings.DisallowMatching);
+            cursorY = disallowRect.yMax + 6f;
 
             var listLabelRect = new Rect(rect.x, cursorY, rect.width, 22f);
             Widgets.Label(listLabelRect, "Conditions");
@@ -275,13 +278,11 @@ namespace HomebrewDot.Net.Rimworld.Policies
                         var def = condition.Condition;
                         _ = x.CompareFrom(def);
                     }
-                    return _settings.ThingDef ? x.CollectFromSnapshot(d => d.GetTable<ThingDef>(Toolkit.Indexing.Def.Thing.FullTableName).Version, d =>  d.GetTable<ThingDef>(Toolkit.Indexing.Def.Thing.FullTableName).Enumerate<IIndexed<ThingDef>>()) : x.CollectFromSnapshot(d => d.GetTable<Thing>(Toolkit.Indexing.Thing.TableName).Version, d => d.GetTable<Thing>(Toolkit.Indexing.Thing.TableName).Enumerate<IIndexed<Thing>>());
+                    return _settings.ThingDef ? x.CollectFromSnapshot(d => d.GetTable<ThingDef>(Toolkit.Indexing.Def.Thing.FullTableName), d =>  d.GetTable<ThingDef>(Toolkit.Indexing.Def.Thing.FullTableName).Enumerate<IIndexed<ThingDef>>(), false) : x.CollectFromSnapshot(d => d.GetTable<Thing>(Toolkit.Indexing.Thing.TableName), d => d.GetTable<Thing>(Toolkit.Indexing.Thing.TableName).Enumerate<IIndexed<Thing>>());
                 });
 
                 context.WithLabel("Simple Filter")
                        .WithDescription(_parent.GetLongDescription(_settings));
-
-                Toolkit.Indexing.ReloadOrchestration();
 
                 if (_settings.ThingDef)
                 {
@@ -302,6 +303,9 @@ namespace HomebrewDot.Net.Rimworld.Policies
         {
             // Fields
             private readonly string _name;
+
+            // State
+            internal int _filterTracker;
 
             // Properties
             /// <inheritdoc/>
@@ -331,12 +335,14 @@ namespace HomebrewDot.Net.Rimworld.Policies
                 scope = Guard.NotNull(scope, nameof(scope));
 
                 // Defs are not really scoped per map so no need for extra filtering
+                _filterTracker++;
                 return new Filter<ThingDef>(_name, scope, this);
             }
             /// <inheritdoc/>
             public void Dispose()
             {
-                Toolkit.Collecting.Remove(_name);
+                if(_filterTracker <= 0)
+                    Toolkit.Collecting.Remove(_name);
             }
         }
 
@@ -344,6 +350,7 @@ namespace HomebrewDot.Net.Rimworld.Policies
         {
             // Fields
             private readonly string _collectionName;
+            private readonly Policy _policy;
 
             // State
             private ICollector<T> _collection;
@@ -353,13 +360,13 @@ namespace HomebrewDot.Net.Rimworld.Policies
             /// <inheritdoc/>
             public Map Scope { get; }
             /// <inheritdoc/>
-            public IDynamicPolicy<Map, T> Policy { get; }
+            public IDynamicPolicy<Map, T> Policy => (IDynamicPolicy<Map,T>)_policy;
 
-            public Filter(string collectionName, Map scope, IDynamicPolicy<Map, T> policy)
+            public Filter(string collectionName, Map scope, Policy policy)
             {
                 _collectionName = Guard.NotNullOrWhitespace(collectionName, nameof(collectionName));
                 Scope = Guard.NotNull(scope, nameof(scope));
-                Policy = Guard.NotNull(policy, nameof(policy));
+                _policy = Guard.NotNull(policy, nameof(policy));
                 if(Toolkit.Collecting.GetAllCollectors().TryGetValue(_collectionName, out var collector) && collector is ICollector<T> typedCollector)
                 {
                     _collection = typedCollector;
@@ -402,7 +409,14 @@ namespace HomebrewDot.Net.Rimworld.Policies
             /// <inheritdoc/>
             public void Dispose()
             {
-                Toolkit.Collecting.Remove(_collectionName);
+                if(typeof(ThingDef) == typeof(T))
+                {
+                    _policy._filterTracker--;
+                }
+                else
+                {
+                    Toolkit.Collecting.Remove(_collectionName);
+                }
             }
         }
     }
@@ -416,6 +430,11 @@ namespace HomebrewDot.Net.Rimworld.Policies
         /// When false it applies to <see cref="Verse.Thing"/>.
         /// </summary>
         public bool ThingDef = true;
+        /// <summary>
+        /// Inverts the policy to filter out matching defs/things instead of including them. 
+        /// When false it will include matching and exclude the rest, when true it will exclude matching and include the rest. Default is false (include matching).
+        /// </summary>
+        public bool DisallowMatching = false;
 
         /// <summary>
         /// The conditions for the filter policy. This is a list of <see cref="SimpleFilterPolicyCondition"/>s that define the conditions for the filter policy.
@@ -426,6 +445,7 @@ namespace HomebrewDot.Net.Rimworld.Policies
         public void ExposeData()
         {
             Scribe_Values.Look(ref ThingDef, "ThingDef");
+            Scribe_Values.Look(ref DisallowMatching, "DisallowMatching");
             Scribe_Collections.Look(ref Conditions, "Conditions", LookMode.Deep);
         }
     }
@@ -435,6 +455,19 @@ namespace HomebrewDot.Net.Rimworld.Policies
     /// </summary>
     public class SimpleFilterPolicyCondition : IExposable
     {
+        // Fields
+        private readonly ConditionDef _staticDef;
+
+        public SimpleFilterPolicyCondition()
+        {
+            
+        }
+
+        private SimpleFilterPolicyCondition(ConditionDef staticDef)
+        {
+            _staticDef = Guard.NotNull(staticDef, nameof(staticDef));
+        }
+
         /// <summary>
         /// The configuration backing this condition.
         /// </summary>
@@ -443,7 +476,7 @@ namespace HomebrewDot.Net.Rimworld.Policies
         /// <summary>
         /// Gets the <see cref="ConditionDef"/> representation of this condition, which can be used in the filtering system to evaluate items against this condition.
         /// </summary>
-        public ConditionDef Condition => Config.ToConditionDef();
+        public ConditionDef Condition => _staticDef ?? Config.ToConditionDef();
 
         /// <summary>
         /// If the next condition defined after the current one should be combined with this condition using an "Or" instead of an "And". Default is false (combined with "And").
@@ -459,6 +492,14 @@ namespace HomebrewDot.Net.Rimworld.Policies
         /// </summary>
         public static SimpleFilterPolicyCondition FromConfig(ConditionDefConfig config)
             => new SimpleFilterPolicyCondition { Config = config ?? new ConditionDefConfig() };
+
+        /// <summary>
+        /// Creates a new condition based on the supplied <see cref="ConditionDef"/>.
+        /// </summary>
+        /// <param name="def">The condition definition to base the new condition on.</param>
+        /// <returns>A new <see cref="SimpleFilterPolicyCondition"/> based on the supplied definition.</returns>
+        public static SimpleFilterPolicyCondition FromDef(ConditionDef def)
+            => new SimpleFilterPolicyCondition(def);
 
         /// <inheritdoc/>
         public void ExposeData()

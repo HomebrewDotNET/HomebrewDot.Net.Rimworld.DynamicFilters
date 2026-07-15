@@ -48,6 +48,7 @@ namespace HomebrewDot.Net.Rimworld
         // State
         private static bool _storageFilteringEnabled;
         private static bool _policiesLoadedFromSettings;
+        private static bool _presetsActivated;
 
         /// <summary>
         /// The unique identifier for this mod.
@@ -99,7 +100,7 @@ namespace HomebrewDot.Net.Rimworld
         {
             if(!_policiesLoadedFromSettings)
             {
-                LogVerbose("Loading activated templates from settings...");
+                if (IsVerboseEnabled) LogVerbose("Loading activated templates from settings...");
                 Policies.LoadActivatedTemplates(Settings.ActiveTemplates);
                 _policiesLoadedFromSettings = true;
             }
@@ -109,11 +110,6 @@ namespace HomebrewDot.Net.Rimworld
 
         internal static void ConfigureServices()
         {
-            if (Prefs.DevMode)
-            {
-                Toolkit.Indexing.Indexers.ByProperty<Def>(x => x.label);
-            }
-
             Toolkit.Hooks.Manager.RegisterHook<Changed>(Instance, e =>
             {
                 if (e.Settings.EnableStorageFiltering)
@@ -124,6 +120,7 @@ namespace HomebrewDot.Net.Rimworld
                 {
                     DisableStorageFiltering();
                 }
+                SetPresets(e.Settings.EnablePresets);
             }, priority: byte.MaxValue);
 
             if (Settings.EnableStorageFiltering)
@@ -137,7 +134,8 @@ namespace HomebrewDot.Net.Rimworld
 
             Toolkit.Hooks.Manager.RegisterHook<OnSaveLoadedTrigger>(Instance, e =>
             {
-                if(Settings.ActiveTemplates.Count == 0)
+                SetPresets(Settings.EnablePresets);
+                if (Settings.ActiveTemplates.Count == 0)
                 {
                     return;
                 }
@@ -159,6 +157,9 @@ namespace HomebrewDot.Net.Rimworld
             StoragePolicyMapPatcher.ApplyPatches();
             Templates.AddTemplate(BlocksWindmillPolicy.Instance);
             Templates.AddTemplate(SimpleFilterPolicy.Instance);
+            Toolkit.Indexing.Indexers.BuildIndexer<Thing>(ToolkitConstants.Thing.Map.Name, x => x.Include<string>(ToolkitConstants.Thing.Map, true));
+            Toolkit.Indexing.Indexers.BuildIndexer<Thing>(DynamicFiltersToolkitConstants.ThingFilter.StorageIdKey.Name, x => x.Include<string>(DynamicFiltersToolkitConstants.ThingFilter.StorageIdKey, true));
+            Toolkit.Indexing.Indexers.BuildIndexer<Thing>(DynamicFiltersToolkitConstants.ThingFilter.StorageKey.Name, x => x.Include<string>(DynamicFiltersToolkitConstants.ThingFilter.StorageIdKey, true));
             Toolkit.Indexing.ReloadOrchestration();
         }
         private static void DisableStorageFiltering()
@@ -167,6 +168,23 @@ namespace HomebrewDot.Net.Rimworld
             _storageFilteringEnabled = false;
             Log("Disabling storage filtering...");
             StoragePolicyMapPatcher.RemovePatches();
+        }
+
+        private static void SetPresets(bool enable)
+        {
+            if(_presetsActivated != enable)
+            {
+                _presetsActivated = enable;
+                if(enable)
+                {
+                    DynamicFilterPresets.ActivatePresets();
+                }
+                else
+                {
+                    DynamicFilterPresets.DeactivatePresets();
+                }
+            }
+
         }
 
         /// <summary>
@@ -201,7 +219,7 @@ namespace HomebrewDot.Net.Rimworld
                 {
                     if (_templates.Add(template))
                     {
-                        LogVerbose($"Added dynamic policy template: {template.GetType().FullName} with storage key {template.StorageKey}");
+                        if (IsVerboseEnabled) LogVerbose($"Added dynamic policy template: {template.GetType().FullName} with storage key {template.StorageKey}");
                     }
                 }
             }
@@ -255,7 +273,7 @@ namespace HomebrewDot.Net.Rimworld
                 {
                     if (_availablePolicies.Add(provider))
                     {
-                        LogVerbose($"Added dynamic policy provider: {provider.GetType().FullName}");
+                        if (IsVerboseEnabled) LogVerbose($"Added dynamic policy provider: {provider.GetType().FullName}");
                     }
                 }
             }
@@ -265,8 +283,9 @@ namespace HomebrewDot.Net.Rimworld
             /// <param name="name">The unique name of the dynamic policy provider to be activated.</param>
             /// <param name="provider">The dynamic policy provider to be activated.</param>
             /// <param name="deactivateExisting">Whether to deactivate an existing provider with the same name if it exists.</param>
+            /// <param name="isReadOnly">Whether the activated provider should be read-only.</param>
             /// <returns>True if the provider was successfully activated; otherwise, false.</returns>
-            public static bool TryActivateProvider(string name, IDynamicPolicyProvider provider, bool deactivateExisting = false)
+            public static bool TryActivateProvider(string name, IDynamicPolicyProvider provider, bool deactivateExisting = false, bool isReadOnly = false)
             {
                 lock (_lock)
                 {
@@ -282,11 +301,11 @@ namespace HomebrewDot.Net.Rimworld
                             return false;
                         }
                     }
-                    var activatedPolicies = new ActivatedPolicies(name, provider);
+                    var activatedPolicies = new ActivatedPolicies(name, provider, isReadOnly);
                     provider.Activate(name, activatedPolicies);
                     _activePolicies.Add(name, activatedPolicies);
-                    Toolkit.Hooks.Manager.LazyTrigger(() => new OnDynamicPolicyActivated(name));
-                    LogVerbose($"Activated dynamic policy provider: {provider.GetType().FullName} with name {name}");
+                    Toolkit.Hooks.Manager.Trigger(new OnDynamicPolicyActivated(name));
+                    if (IsVerboseEnabled) LogVerbose($"Activated dynamic policy provider: {provider.GetType().FullName} with name {name}");
                     return true;
                 }
             }
@@ -301,7 +320,7 @@ namespace HomebrewDot.Net.Rimworld
                     if (_activePolicies.TryGetValue(name, out var activatedPolicies))
                     {
                         bool disposeCalled = false;
-                        Toolkit.Hooks.Manager.LazyTrigger(() => new OnDynamicPolicyDeactivated(name));
+                        Toolkit.Hooks.Manager.Trigger(new OnDynamicPolicyDeactivated(name));
                         activatedPolicies.Provider.Deactivate(() =>
                         {
                             if (!disposeCalled)
@@ -315,7 +334,7 @@ namespace HomebrewDot.Net.Rimworld
                             activatedPolicies.Dispose();
                         }
                         _activePolicies.Remove(name);
-                        LogVerbose($"Deactivated dynamic policy provider: {activatedPolicies.Provider.GetType().FullName} with name {name}");
+                        if (IsVerboseEnabled) LogVerbose($"Deactivated dynamic policy provider: {activatedPolicies.Provider.GetType().FullName} with name {name}");
                     }
                     else
                     {
@@ -383,12 +402,20 @@ namespace HomebrewDot.Net.Rimworld
                     Toolkit.Indexing.ConfigureOrchestrator += ConfigureGathering;
                 }
                 /// <summary>
-                /// Returns the latest snapshot of the table containing all defs in the game.
+                /// Returns the latest snapshot of the table containing all thing filters in the game.
                 /// </summary>
-                /// <returns>The latest snapshot of the table containing all defs in the game, or null if the table is not available.</returns>
+                /// <returns>The latest snapshot of the table containing all thing filters in the game, or null if the table is not available.</returns>
                 public static IReadOnlyTable<Verse.ThingFilter> GetTable()
                 {
                     return Toolkit.Indexing.Manager.DatabaseSnapshot?.GetTable<Verse.ThingFilter>(TableName);
+                }
+                /// <summary>
+                /// Returns the current table containing all thing filters in the game. This is the live table that is being updated by the gatherer and is used for indexing and searching thing filters.
+                /// </summary>
+                /// <returns>The current table containing all thing filters in the game, or null if the table is not available.</returns>
+                public static IReadOnlyTable<Verse.ThingFilter> GetCurrentTable()
+                {
+                    return Toolkit.Indexing.Manager.Database?.GetTable<Verse.ThingFilter>(TableName);
                 }
                 /// <summary>
                 /// Adds addition configuration for the table.
@@ -423,6 +450,10 @@ namespace HomebrewDot.Net.Rimworld
 
             public bool EnableStorageFiltering = true;
             /// <summary>
+            /// Enables some readonly policies with common use cases.
+            /// </summary>
+            public bool EnablePresets = false;
+            /// <summary>
             /// The list of activated templates. This can be used to restore the activated policies when the game is loaded, or to display the activated policies in the UI.
             /// </summary>
             public List<ActivatedTemplates> ActiveTemplates = new List<ActivatedTemplates>();
@@ -432,6 +463,7 @@ namespace HomebrewDot.Net.Rimworld
             {
                 base.ExposeData();
                 Scribe_Collections.Look(ref ActiveTemplates, nameof(ActiveTemplates), LookMode.Deep);
+                Scribe_Values.Look(ref EnablePresets, nameof(EnablePresets), defaultValue: false);
                 Scribe_Values.Look(ref EnableStorageFiltering, nameof(EnableStorageFiltering), defaultValue: true);
 
                 if (Scribe.mode == LoadSaveMode.Saving)

@@ -142,11 +142,11 @@ namespace HomebrewDot.Net.RimWorld.DynamicFilters.Tests.State.Components
             var parentStateStore = (IStateStore<string>)parentStore;
 
             // Act
-            var childStore = parentStateStore.GetChildStore<int>(42);
+            var childStore = parentStateStore.GetChildStore<string>("42");
 
             // Assert
             Assert.NotNull(childStore);
-            Assert.Equal(42, childStore.Instance);
+            Assert.Equal("42", childStore.Instance);
         }
 
         [Fact]
@@ -157,8 +157,8 @@ namespace HomebrewDot.Net.RimWorld.DynamicFilters.Tests.State.Components
             var parentStateStore = (IStateStore<string>)parentStore;
 
             // Act
-            var child1 = parentStateStore.GetChildStore<int>(42);
-            var child2 = parentStateStore.GetChildStore<int>(42);
+            var child1 = parentStateStore.GetChildStore<string>("42");
+            var child2 = parentStateStore.GetChildStore<string>("42");
 
             // Assert
             Assert.Same(child1, child2);
@@ -172,13 +172,13 @@ namespace HomebrewDot.Net.RimWorld.DynamicFilters.Tests.State.Components
             var parentStateStore = (IStateStore<string>)parentStore;
 
             // Act
-            var child1 = parentStateStore.GetChildStore<int>(42);
-            var child2 = parentStateStore.GetChildStore<int>(99);
+            var child1 = parentStateStore.GetChildStore<string>("42");
+            var child2 = parentStateStore.GetChildStore<string>("99");
 
             // Assert
             Assert.NotSame(child1, child2);
-            Assert.Equal(42, child1.Instance);
-            Assert.Equal(99, child2.Instance);
+            Assert.Equal("42", child1.Instance);
+            Assert.Equal("99", child2.Instance);
         }
 
         [Fact]
@@ -187,10 +187,10 @@ namespace HomebrewDot.Net.RimWorld.DynamicFilters.Tests.State.Components
             // Arrange
             var parentStore = new StateStore<string>("parent");
             var parentStateStore = (IStateStore<string>)parentStore;
-            parentStateStore.GetChildStore<int>(42);
+            parentStateStore.GetChildStore<string>("42");
 
             // Act
-            var destroyed = parentStateStore.DestroyChildStore<int>(42);
+            var destroyed = parentStateStore.DestroyChildStore<string>("42");
 
             // Assert
             Assert.True(destroyed);
@@ -216,12 +216,11 @@ namespace HomebrewDot.Net.RimWorld.DynamicFilters.Tests.State.Components
             // Arrange
             var parentStore = new StateStore<string>("parent");
             var parentStateStore = (IStateStore<string>)parentStore;
-            var original = parentStateStore.GetChildStore<int>(42);
-            parentStateStore.DestroyChildStore<int>(42);
+            var original = parentStateStore.GetChildStore<string>("42");
+            parentStateStore.DestroyChildStore<string>("42");
 
             // Act
-            var newStore = parentStateStore.GetChildStore<int>(42);
-
+            var newStore = parentStateStore.GetChildStore<string>("42");
             // Assert
             Assert.NotSame(original, newStore);
         }

@@ -54,6 +54,11 @@
 	</ItemGroup>
 
 	<ItemGroup>
+		<InternalsVisibleTo Include="HomebrewDot.Net.RimWorld.DynamicFilters.Tests" />
+		<InternalsVisibleTo Include="HomebrewDot.Net.RimWorld.DynamicFilters.IntegrationTests" />
+	</ItemGroup>
+
+	<ItemGroup>
 	  <Folder Include="UI\Components\" />
 	</ItemGroup>
 

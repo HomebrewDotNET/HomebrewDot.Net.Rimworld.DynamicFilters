@@ -29,6 +29,12 @@ namespace HomebrewDot.Net.Rimworld.UI.Settings.Tabs
                 ref enableStorageFiltering,
                 "Toggle dynamic storage policy support and filtering hooks.");
             DynamicFiltersToolkit.Settings.EnableStorageFiltering = enableStorageFiltering;
+            var enablePresets = DynamicFiltersToolkit.Settings.EnablePresets;
+            listing.CheckboxLabeled(
+                "Enable policy presets",
+                ref enablePresets,
+                "Enables policy presets with common use cases.");
+            DynamicFiltersToolkit.Settings.EnablePresets = enablePresets;
 
             listing.GapLine(12f);
             DrawFailedTemplateCleanup(listing);

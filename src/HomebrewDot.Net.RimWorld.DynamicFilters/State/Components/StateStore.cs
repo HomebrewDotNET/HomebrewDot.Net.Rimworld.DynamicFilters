@@ -2,6 +2,7 @@
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
+using System.Runtime.CompilerServices;
 using System.Text;
 using System.Threading.Tasks;
 using static HomebrewDot.Net.Rimworld.Toolkit.Helpers;
@@ -12,7 +13,7 @@ namespace HomebrewDot.Net.Rimworld.State.Components
     /// Default implementation of <see cref="IStateStore{T}"/>.
     /// </summary>
     /// <typeparam name="T">The type of the state store.</typeparam>
-    public class StateStore<T>: IStateStore<T>
+    public class StateStore<T>: IStateStore<T> where T : class
     {
         // Statics
         /// <summary>
@@ -60,7 +61,7 @@ namespace HomebrewDot.Net.Rimworld.State.Components
             }
         }
         /// <inheritdoc/>
-        IStateStore<TChild> IStateStore<T>.GetChildStore<TChild>(TChild instance)
+        IStateStore<TChild> IStateStore<T>.GetChildStore<TChild>(TChild instance) where TChild : class
         {
             if(!_childStores.TryGetValue(instance, out var store))
             {
@@ -69,7 +70,7 @@ namespace HomebrewDot.Net.Rimworld.State.Components
                     if (!_childStores.TryGetValue(instance, out store))
                     {
                         store = new StateStore<TChild>(instance);
-                        _childStores[instance] = store;
+                        _childStores.Add(instance, store);
                     }
                     return (IStateStore<TChild>)store;
                 }

@@ -10,6 +10,7 @@ using HomebrewDot.Net.Rimworld.Indexing;
 using UnityEngine;
 using Verse;
 using static HomebrewDot.Net.Rimworld.Toolkit.Helpers;
+using static HomebrewDot.Net.Rimworld.Toolkit.Helpers.Logging;
 using static Verse.ThingFilterUI;
 
 namespace HomebrewDot.Net.Rimworld.Storage.Models
@@ -72,27 +73,39 @@ namespace HomebrewDot.Net.Rimworld.Storage.Models
                 return true;
             }
 
-            var policyManager = map.GetComponent<MapPolicyManager>();
+            var policyManager = MapPolicyManager.GetFor(map);
             if(policyManager == null)
             {
                 return true;
             }
-            bool anyFilterActive = false;
-            if(policyManager.TryGetActiveThingFilter(__instance, out var activeFilter))
+
+            bool anyFilterActive = policyManager.TryGetActiveFilters(__instance, out var activeFilter, out var activeDefFilter);
+            if(!anyFilterActive)
             {
-               anyFilterActive = true;
-               __result = activeFilter.Filter(t);
+                return true;
             }
-            if(!anyFilterActive && policyManager.TryGetActiveDefFilter(__instance, out var activeDefFilter))
+
+            bool thingResult = true;
+            bool defResult = true;
+            string thingLabel = "*";
+            string defLabel = "*";
+            if (activeFilter != null)
             {
-                anyFilterActive = true;
-                __result = activeDefFilter.Filter(t.def);
+                thingResult = activeFilter.Filter(t);
+                thingLabel = thingResult.ToString();
             }
-            return !anyFilterActive;
+            if (activeDefFilter != null)
+            {
+                defResult = activeDefFilter.Filter(t.def);
+                defLabel = defResult.ToString();
+            }
+
+            __result = thingResult && defResult;
+            return __result;
         }
 
-        private const float PolicyBarHeight = 32f;
-        private const float PolicyBarGap = 6f;
+        private const float PolicyBarHeight = 28f;
+        private const float PolicyBarGap = 4f;
 
         /// <summary>
         /// Draws the dynamic policy dropdown at the top of the ThingFilter config window, then
@@ -111,98 +124,142 @@ namespace HomebrewDot.Net.Rimworld.Storage.Models
                 return;
             }
 
-            var manager = map.GetComponent<MapPolicyManager>();
+            var manager = MapPolicyManager.GetFor(map);
             if (manager == null || !manager.CouldManage(filter))
             {
                 return;
             }
 
-            var availablePolicies = manager.GetActivePolicyNames();
-            if (availablePolicies == null || availablePolicies.Count == 0)
+            var thingPolicies = manager.GetActiveThingPolicyNames();
+            var defPolicies = manager.GetActiveDefPolicyNames();
+            bool hasThings = thingPolicies != null && thingPolicies.Count > 0;
+            bool hasDefs = defPolicies != null && defPolicies.Count > 0;
+
+            if (!hasThings && !hasDefs)
             {
                 return;
             }
 
-            // Draw the dropdown strip at the top of the rect.
-            var barRect = new Rect(rect.x, rect.y, rect.width, PolicyBarHeight);
+            var barsDrawn = 0;
+            var cursorY = rect.y;
 
-            manager.TryGetManagedPolicyName(filter, out var selectedPolicyName);
-            var selectedLabel = string.IsNullOrWhiteSpace(selectedPolicyName)
-                ? "None"
-                : BuildPolicyLabel(manager, selectedPolicyName);
+            // Thing filter bar
+            if (hasThings)
+            {
+                var barRect = new Rect(rect.x, cursorY, rect.width, PolicyBarHeight);
+                DrawPolicyBar(barRect, manager, filter, thingPolicies, isForThing: true);
+                cursorY = barRect.yMax + PolicyBarGap;
+                barsDrawn++;
+            }
+
+            // Def filter bar
+            if (hasDefs)
+            {
+                var barRect = new Rect(rect.x, cursorY, rect.width, PolicyBarHeight);
+                DrawPolicyBar(barRect, manager, filter, defPolicies, isForThing: false);
+                cursorY = barRect.yMax + PolicyBarGap;
+                barsDrawn++;
+            }
+
+            var totalHeight = barsDrawn * PolicyBarHeight + (barsDrawn - 1) * PolicyBarGap + PolicyBarGap;
+            rect = new Rect(rect.x, rect.y + totalHeight, rect.width, Mathf.Max(0f, rect.height - totalHeight));
+        }
+
+        private static void DrawPolicyBar(Rect barRect, MapPolicyManager manager, ThingFilter filter,
+            IReadOnlyCollection<string> availablePolicies, bool isForThing)
+        {
+            var prefix = isForThing ? "Allow" : "Select";
+            manager.TryGetManagedPolicyName(filter, isForThing, out var selectedPolicyName);
+            var displayName = string.IsNullOrWhiteSpace(selectedPolicyName) ? "*" : selectedPolicyName;
+            var fullLabel = $"{prefix}: {displayName}";
+
+            // Truncate if too long
+            var truncatedLabel = fullLabel;
+            var needsTooltip = false;
+            var labelWidth = Text.CalcSize(fullLabel).x;
+            var availableWidth = barRect.width - 8f;
+            if (labelWidth > availableWidth)
+            {
+                needsTooltip = true;
+                truncatedLabel = TruncateLabel(fullLabel, availableWidth);
+            }
 
             if (Widgets.ButtonInvisible(barRect))
             {
                 var options = new List<FloatMenuOption>
                 {
-                    new FloatMenuOption("None", () => manager.Unmanage(filter))
+                    new FloatMenuOption("None", () => manager.Unmanage(filter, isForThing))
                 };
 
                 foreach (var policyName in availablePolicies)
                 {
                     var capturedPolicyName = policyName;
-                    options.Add(new FloatMenuOption(BuildPolicyLabel(manager, capturedPolicyName), () => manager.ManageWith(filter, capturedPolicyName)));
+                    options.Add(new FloatMenuOption(policyName, () => manager.ManageWith(filter, capturedPolicyName, isForThing)));
                 }
 
                 Find.WindowStack.Add(new FloatMenu(options));
             }
 
             Widgets.DrawMenuSection(barRect);
-            Widgets.Label(barRect.ContractedBy(4f), $"Dynamic policy: {selectedLabel}");
-            rect = new Rect(rect.x, rect.y + PolicyBarHeight + PolicyBarGap, rect.width, Mathf.Max(0f, rect.height - PolicyBarHeight - PolicyBarGap));
+            var labelRect = barRect.ContractedBy(4f);
+            Widgets.Label(labelRect, truncatedLabel);
+
+            if (needsTooltip && Mouse.IsOver(barRect))
+            {
+                TooltipHandler.TipRegion(barRect, fullLabel);
+            }
         }
 
-        private static string BuildPolicyLabel(MapPolicyManager manager, string policyName)
+        private static string TruncateLabel(string label, float maxWidth)
         {
-            var hasThing = manager.TryGetThingFilter(policyName, out _);
-            var hasDef = manager.TryGetDefFilter(policyName, out _);
+            if (Text.CalcSize(label).x <= maxWidth)
+            {
+                return label;
+            }
 
-            if (hasThing && hasDef)
+            var ellipsis = "...";
+            var ellipsisWidth = Text.CalcSize(ellipsis).x;
+            var availableForText = maxWidth - ellipsisWidth;
+            if (availableForText <= 0f)
             {
-                return $"{policyName} (thing|def)";
+                return ellipsis;
             }
-            if (hasThing)
+
+            // Binary search for the right truncation point
+            var low = 0;
+            var high = label.Length;
+            while (low < high)
             {
-                return $"{policyName} (thing)";
+                var mid = (low + high + 1) / 2;
+                var candidate = label.Substring(0, mid) + ellipsis;
+                if (Text.CalcSize(candidate).x <= maxWidth)
+                {
+                    low = mid;
+                }
+                else
+                {
+                    high = mid - 1;
+                }
             }
-            if (hasDef)
-            {
-                return $"{policyName} (def)";
-            }
-            return policyName;
+
+            return label.Substring(0, low) + ellipsis;
         }
 
         private static Map ResolveMap(ThingFilter filter)
         {
-            var table = DynamicFiltersToolkit.Indexing.ThingFilter.GetTable();
+            var table = DynamicFiltersToolkit.Indexing.ThingFilter.GetCurrentTable();
             if (table == null || !table.TryFind<ThingFilter>(filter, out IIndexed<ThingFilter> indexed))
             {
                 return null;
             }
 
-            if (TryGetMetadata<Map>(indexed, "map", out var map))
+            var map = indexed.GetValue<Map>(nameof(Map));
+            if (map != null)
             {
                 return map;
             }
 
             return null;
-        }
-
-        private static bool TryGetMetadata<T>(IIndexed<ThingFilter> indexed, string key, out T value)
-        {
-            value = default(T);
-            if (indexed?.Metadata == null || string.IsNullOrWhiteSpace(key))
-            {
-                return false;
-            }
-
-            if (indexed.Metadata.TryGetValue(key, out var directValue) && directValue is T directTypedValue)
-            {
-                value = directTypedValue;
-                return true;
-            }
-
-            return false;
         }
     }
 }

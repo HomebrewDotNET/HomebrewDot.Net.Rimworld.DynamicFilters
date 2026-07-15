@@ -7,7 +7,7 @@
 		<LangVersion>latestmajor</LangVersion>
 		<IsPackable>false</IsPackable>
 		<IsTestProject>true</IsTestProject>
-		<OutputPath>$(TEMP)\HomebrewDot.Net.RimWorld.DynamicFilters.Tests\$(Configuration)\$(TargetFramework)\</OutputPath>
+		<OutputPath>$(TEMP)\HomebrewDot.Net.RimWorld.DynamicFilters.IntegrationTests\$(Configuration)\$(TargetFramework)\</OutputPath>
 		<AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
 		<RimworldVersion Condition="'$(RIMWORLD_VERSION)' == ''">1.6</RimworldVersion>
 		<RimworldVersion Condition="'$(RIMWORLD_VERSION)' != ''">$(RIMWORLD_VERSION)</RimworldVersion>
@@ -22,6 +22,13 @@
 		<HarmonyRoot Condition="'$(RIMWORLD_HARMONY_ROOT)' == ''">$(RimworldWorkshopRoot)\2009463077\$(HarmonyVersion)\Assemblies</HarmonyRoot>
 		<HarmonyRoot Condition="'$(RIMWORLD_HARMONY_ROOT)' != ''">$(RIMWORLD_HARMONY_ROOT)</HarmonyRoot>
 	</PropertyGroup>
+
+	<ItemGroup>
+		<AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute">
+			<_Parameter1>RimworldLocation</_Parameter1>
+			<_Parameter2>$(RimworldRoot)</_Parameter2>
+		</AssemblyAttribute>
+	</ItemGroup>
 
 	<ItemGroup>
 		<PackageReference Include="Microsoft.NET.Test.Sdk" />
@@ -45,14 +52,17 @@
 	</ItemGroup>
 
 	<ItemGroup>
-		<Reference Include="Assembly-CSharp">
-			<HintPath>C:\Program Files (x86)\Steam\steamapps\common\RimWorld\RimWorldWin64_Data\Managed\Assembly-CSharp.dll</HintPath>
-		</Reference>
-		<Reference Include="UnityEngine.CoreModule">
-			<HintPath>C:\Program Files (x86)\Steam\steamapps\common\RimWorld\RimWorldWin64_Data\Managed\UnityEngine.CoreModule.dll</HintPath>
-		</Reference>
 		<Reference Include="0Harmony">
 			<HintPath>$(HarmonyRoot)\0Harmony.dll</HintPath>
+		</Reference>
+		<Reference Include="Assembly-CSharp">
+			<HintPath>$(RimWorldManaged)\Assembly-CSharp.dll</HintPath>
+		</Reference>
+		<Reference Include="UnityEngine.CoreModule">
+			<HintPath>$(RimWorldManaged)\UnityEngine.CoreModule.dll</HintPath>
+		</Reference>
+		<Reference Include="UnityEngine.IMGUIModule">
+			<HintPath>$(RimWorldManaged)\UnityEngine.IMGUIModule.dll</HintPath>
 		</Reference>
 	</ItemGroup>
 

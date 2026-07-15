@@ -30,7 +30,7 @@ namespace HomebrewDot.Net.Rimworld.UI.Settings.Tabs
         /// <inheritdoc/>
         public void Draw(Rect rect)
         {
-            var policies = DynamicFiltersToolkit.Policies.ActivePoliciesInfo.OrderBy(x => x.Name, StringComparer.OrdinalIgnoreCase).ToList();
+            var policies = DynamicFiltersToolkit.Policies.ActivePoliciesInfo.Where(p => !p.IsReadOnly).OrderBy(x => x.Name, StringComparer.OrdinalIgnoreCase).ToList();
             var selectedPolicy = ResolveSelectedPolicy(policies);
 
             var leftRect = new Rect(rect.x, rect.y, rect.width * ListWidthRatio, rect.height);
@@ -182,6 +182,10 @@ namespace HomebrewDot.Net.Rimworld.UI.Settings.Tabs
 
         private void RequestSavePolicyEdits(ActivatedPolicies selectedPolicy)
         {
+            if (selectedPolicy.IsReadOnly)
+            {
+                return;
+            }
             if (_editingTemplate == null)
             {
                 return;
@@ -202,6 +206,10 @@ namespace HomebrewDot.Net.Rimworld.UI.Settings.Tabs
 
         private void CommitPolicyEdits(ActivatedPolicies selectedPolicy)
         {
+            if(selectedPolicy.IsReadOnly)
+            {
+                return;
+            }
             if (_editingTemplate == null)
             {
                 return;

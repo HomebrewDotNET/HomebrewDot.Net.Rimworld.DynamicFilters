@@ -12,7 +12,7 @@ namespace HomebrewDot.Net.Rimworld.Filtering
     /// </summary>
     /// <typeparam name="TScope">The type of the scope.</typeparam>
     /// <typeparam name="TItem">The type of the items to be filtered.</typeparam>
-    public interface IDynamicPolicy<TScope, in TItem>
+    public interface IDynamicPolicy<TScope, in TItem> where TScope : class
     {
         /// <summary>
         /// The unique name of this policy.

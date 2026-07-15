@@ -12,7 +12,7 @@ namespace HomebrewDot.Net.Rimworld.Filtering
     /// </summary>
     /// <typeparam name="TScope">The type of the scope.</typeparam>
     /// <typeparam name="TItem">The type of the items to be filtered.</typeparam>
-    public interface IDynamicFilter<TScope, in TItem>
+    public interface IDynamicFilter<TScope, in TItem> where TScope : class
     {
         /// <summary>
         /// The instance the filter is scoped to.

@@ -1,14 +1,17 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Security.Policy;
 using System.Text;
 using System.Threading.Tasks;
 using HarmonyLib;
 using HomebrewDot.Net.Rimworld.Indexing;
+using HomebrewDot.Net.Rimworld.Indexing.Models;
 using RimWorld;
 using Verse;
 using Verse.Noise;
 using static HomebrewDot.Net.Rimworld.Toolkit.Helpers;
+using Zone = Verse.Zone;
 
 namespace HomebrewDot.Net.Rimworld.Filtering.Components
 {
@@ -90,7 +93,11 @@ namespace HomebrewDot.Net.Rimworld.Filtering.Components
                             if (zone?.settings?.filter != null)
                             {
                                 var storageId = zone.GetUniqueLoadID();
-                                SnapshotManager?.Push(zone.settings.filter, (DynamicFiltersToolkitConstants.ThingFilter.StorageKey, zone), (DynamicFiltersToolkitConstants.ThingFilter.StorageIdKey, storageId), (nameof(map), map));
+                                var metadata = new IndexMetadata();
+                                metadata.Set(DynamicFiltersToolkitConstants.ThingFilter.StorageKey, zone, persistent: true);
+                                metadata.Set(DynamicFiltersToolkitConstants.ThingFilter.StorageIdKey, storageId, persistent: true);
+                                metadata.Set(ToolkitConstants.Thing.Map, map, persistent: true);
+                                SnapshotManager?.Push(zone.settings.filter, ref metadata);
                             }
                         }
                     }
@@ -102,7 +109,11 @@ namespace HomebrewDot.Net.Rimworld.Filtering.Components
                             {
                                 var settings = buildingStorage.GetStoreSettings();
                                 var storageId = buildingStorage.storageGroup != null ? buildingStorage.storageGroup.GetUniqueLoadID() : buildingStorage.GetUniqueLoadID();
-                                SnapshotManager?.Push(settings.filter, (DynamicFiltersToolkitConstants.ThingFilter.StorageKey, buildingStorage), (DynamicFiltersToolkitConstants.ThingFilter.StorageIdKey, storageId), (nameof(map), map));
+                                var metadata = new IndexMetadata();
+                                metadata.Set(DynamicFiltersToolkitConstants.ThingFilter.StorageKey, buildingStorage, persistent: true);
+                                metadata.Set(DynamicFiltersToolkitConstants.ThingFilter.StorageIdKey, storageId, persistent: true);
+                                metadata.Set(ToolkitConstants.Thing.Map, map, persistent: true);
+                                SnapshotManager?.Push(settings.filter, ref metadata);
                             }
                             if (building is Building_WorkTable workTable && workTable?.billStack != null)
                             {
@@ -110,8 +121,12 @@ namespace HomebrewDot.Net.Rimworld.Filtering.Components
                                 {
                                     if (bill?.ingredientFilter != null)
                                     {
-                                        var storageId = bill.GetUniqueLoadID();
-                                        SnapshotManager?.Push(bill.ingredientFilter, (DynamicFiltersToolkitConstants.ThingFilter.StorageKey, bill), (DynamicFiltersToolkitConstants.ThingFilter.StorageIdKey, storageId), (nameof(map), map));
+                                        var storageId = bill.GetUniqueLoadID(); 
+                                        var metadata = new IndexMetadata();
+                                        metadata.Set(DynamicFiltersToolkitConstants.ThingFilter.StorageKey, bill, persistent: true);
+                                        metadata.Set(DynamicFiltersToolkitConstants.ThingFilter.StorageIdKey, storageId, persistent: true);
+                                        metadata.Set(ToolkitConstants.Thing.Map, map, persistent: true);
+                                        SnapshotManager?.Push(bill.ingredientFilter, ref metadata);
                                     }
                                 }
                             }
@@ -128,7 +143,10 @@ namespace HomebrewDot.Net.Rimworld.Filtering.Components
                     if (outfit?.filter != null)
                     {
                         var storageId = outfit.GetUniqueLoadID();
-                        SnapshotManager?.Push(outfit.filter, (DynamicFiltersToolkitConstants.ThingFilter.StorageKey, outfit), (DynamicFiltersToolkitConstants.ThingFilter.StorageIdKey, storageId));
+                        var metadata = new IndexMetadata();
+                        metadata.Set(DynamicFiltersToolkitConstants.ThingFilter.StorageKey, outfit, persistent: true);
+                        metadata.Set(DynamicFiltersToolkitConstants.ThingFilter.StorageIdKey, storageId, persistent: true);
+                        SnapshotManager?.Push(outfit.filter, ref metadata);
                     }
                 }
             }
@@ -139,8 +157,11 @@ namespace HomebrewDot.Net.Rimworld.Filtering.Components
                 {
                     if (foodRestriction?.filter != null)
                     {
-                        var storageId = foodRestriction.GetUniqueLoadID();
-                        SnapshotManager?.Push(foodRestriction.filter, (DynamicFiltersToolkitConstants.ThingFilter.StorageKey, foodRestriction), (DynamicFiltersToolkitConstants.ThingFilter.StorageIdKey, storageId));
+                        var storageId = foodRestriction.GetUniqueLoadID(); 
+                        var metadata = new IndexMetadata();
+                        metadata.Set(DynamicFiltersToolkitConstants.ThingFilter.StorageKey, foodRestriction, persistent: true);
+                        metadata.Set(DynamicFiltersToolkitConstants.ThingFilter.StorageIdKey, storageId, persistent: true);
+                        SnapshotManager?.Push(foodRestriction.filter, ref metadata);
                     }
                 }
             }
@@ -164,7 +185,11 @@ namespace HomebrewDot.Net.Rimworld.Filtering.Components
                     var thingFilter = stockpile?.settings?.filter;
                     if (thingFilter != null)
                     {
-                        SnapshotManager?.Destroyed(thingFilter, (DynamicFiltersToolkitConstants.ThingFilter.StorageIdKey, storageId), (nameof(stockpile.Map), stockpile.Map), (DynamicFiltersToolkitConstants.ThingFilter.StorageKey, stockpile));
+                        var metadata = new IndexMetadata();
+                        metadata.Set(DynamicFiltersToolkitConstants.ThingFilter.StorageKey, stockpile, persistent: true);
+                        metadata.Set(ToolkitConstants.Thing.Map, stockpile.Map, persistent: true);
+                        metadata.Set(DynamicFiltersToolkitConstants.ThingFilter.StorageIdKey, storageId, persistent: true);
+                        SnapshotManager?.Destroyed(thingFilter, ref metadata);
                     }
                 }
             }
@@ -180,7 +205,11 @@ namespace HomebrewDot.Net.Rimworld.Filtering.Components
                     var thingFilter = stockpile?.settings?.filter;
                     if (thingFilter != null)
                     {
-                        SnapshotManager?.Push(thingFilter, (DynamicFiltersToolkitConstants.ThingFilter.StorageIdKey, storageId), (nameof(stockpile.Map), stockpile.Map), (DynamicFiltersToolkitConstants.ThingFilter.StorageKey, stockpile));
+                        var metadata = new IndexMetadata();
+                        metadata.Set(DynamicFiltersToolkitConstants.ThingFilter.StorageKey, stockpile, persistent: true);
+                        metadata.Set(ToolkitConstants.Thing.Map, stockpile.Map, persistent: true);
+                        metadata.Set(DynamicFiltersToolkitConstants.ThingFilter.StorageIdKey, storageId, persistent: true);
+                        SnapshotManager?.Push(thingFilter, ref metadata);
                     }
                 }
             }
@@ -196,7 +225,11 @@ namespace HomebrewDot.Net.Rimworld.Filtering.Components
                 if (thingFilter != null)
                 {
                     var storageId = bill.GetUniqueLoadID();
-                    SnapshotManager?.Destroyed(thingFilter, (DynamicFiltersToolkitConstants.ThingFilter.StorageIdKey, storageId), (nameof(__instance.billGiver.Map), __instance.billGiver?.Map), (DynamicFiltersToolkitConstants.ThingFilter.StorageKey, bill));
+                    var metadata = new IndexMetadata();
+                    metadata.Set(DynamicFiltersToolkitConstants.ThingFilter.StorageKey, bill, persistent: true);
+                    metadata.Set(ToolkitConstants.Thing.Map, __instance.billGiver.Map, persistent: true);
+                    metadata.Set(DynamicFiltersToolkitConstants.ThingFilter.StorageIdKey, storageId, persistent: true);
+                    SnapshotManager?.Destroyed(thingFilter, ref metadata);
                 }
             }
             /// <summary>
@@ -210,7 +243,11 @@ namespace HomebrewDot.Net.Rimworld.Filtering.Components
                 if (thingFilter != null)
                 {
                     var storageId = bill.GetUniqueLoadID();
-                    SnapshotManager?.Push(thingFilter, (DynamicFiltersToolkitConstants.ThingFilter.StorageIdKey, storageId), (nameof(__instance.billGiver.Map), __instance.billGiver?.Map), (DynamicFiltersToolkitConstants.ThingFilter.StorageKey, bill));
+                    var metadata = new IndexMetadata();
+                    metadata.Set(DynamicFiltersToolkitConstants.ThingFilter.StorageKey, bill);
+                    metadata.Set(ToolkitConstants.Thing.Map, __instance.billGiver.Map);
+                    metadata.Set(DynamicFiltersToolkitConstants.ThingFilter.StorageIdKey, storageId);
+                    SnapshotManager?.Push(thingFilter, ref metadata);
                 }
             }
             /// <summary>
@@ -221,7 +258,11 @@ namespace HomebrewDot.Net.Rimworld.Filtering.Components
             {
                 var settings = __instance.GetStoreSettings();
                 var storageId = __instance.storageGroup != null ? __instance.storageGroup.GetUniqueLoadID() : __instance.GetUniqueLoadID();
-                SnapshotManager?.Push(settings.filter, (DynamicFiltersToolkitConstants.ThingFilter.StorageKey, __instance), (DynamicFiltersToolkitConstants.ThingFilter.StorageIdKey, storageId), (nameof(__instance.Map), __instance.Map));
+                var metadata = new IndexMetadata();
+                metadata.Set(DynamicFiltersToolkitConstants.ThingFilter.StorageKey, __instance, persistent: true);
+                metadata.Set(ToolkitConstants.Thing.Map, __instance.Map, persistent: true);
+                metadata.Set(DynamicFiltersToolkitConstants.ThingFilter.StorageIdKey, storageId, persistent: true);
+                SnapshotManager?.Push(settings.filter, ref metadata);
             }
 
             /// <summary>
@@ -234,11 +275,17 @@ namespace HomebrewDot.Net.Rimworld.Filtering.Components
                 var settings = __instance.GetStoreSettings();
                 var instanceSettings = __instance.settings;
                 var storageId = __instance.storageGroup != null ? __instance.storageGroup.GetUniqueLoadID() : __instance.GetUniqueLoadID();
+                var metadata = new IndexMetadata();
+                metadata.Set(DynamicFiltersToolkitConstants.ThingFilter.StorageKey, __instance, persistent: true);
+                metadata.Set(ToolkitConstants.Thing.Map, __instance.Map, persistent: true);
+                metadata.Set(DynamicFiltersToolkitConstants.ThingFilter.StorageIdKey, storageId, persistent: true);
+                metadata.Set(ToolkitConstants.Thing.DestroyMode, mode);
                 var instanceStorageId = __instance.GetUniqueLoadID();
-                SnapshotManager?.Destroyed(settings.filter, (DynamicFiltersToolkitConstants.ThingFilter.StorageKey, __instance), (DynamicFiltersToolkitConstants.ThingFilter.StorageIdKey, storageId), (nameof(__instance.Map), __instance.Map), (nameof(DestroyMode), mode));
+                SnapshotManager?.Destroyed(settings.filter, ref metadata);
                 if(settings != instanceSettings)
                 {
-                    SnapshotManager?.Destroyed(instanceSettings.filter, (DynamicFiltersToolkitConstants.ThingFilter.StorageKey, __instance), (DynamicFiltersToolkitConstants.ThingFilter.StorageIdKey, instanceStorageId), (nameof(__instance.Map), __instance.Map), (nameof(DestroyMode), mode));
+                    metadata = new IndexMetadata();
+                    SnapshotManager?.Destroyed(instanceSettings.filter, ref metadata);
                 }
             }
         }

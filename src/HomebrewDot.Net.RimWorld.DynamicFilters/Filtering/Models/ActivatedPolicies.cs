@@ -38,20 +38,27 @@ namespace HomebrewDot.Net.Rimworld.Filtering.Models
         /// The provider that activated these policies.
         /// </summary>
         public IDynamicPolicyProvider Provider { get; }
+        /// <summary>
+        /// Determines if the activated policies are read-only, meaning the settings cannot be changed.
+        /// Useful for presets provided through code.
+        /// </summary>
+        public bool IsReadOnly { get; private set; }
 
         /// <inheritdoc cref="ActivatedPolicies"/>
         /// <param name="name"><inheritdoc cref="Name"/></param>
         /// <param name="dynamicPolicyProvider"><inheritdoc cref="Provider"/></param>
-        public ActivatedPolicies(string name, IDynamicPolicyProvider dynamicPolicyProvider)
+        /// <param name="isReadOnly"><inheritdoc cref="IsReadOnly"/></param>
+        public ActivatedPolicies(string name, IDynamicPolicyProvider dynamicPolicyProvider, bool isReadOnly = false)
         {
             Name = Guard.NotNullOrWhitespace(name, nameof(name));
             Provider = Guard.NotNull(dynamicPolicyProvider, nameof(dynamicPolicyProvider));
             Label = dynamicPolicyProvider.GetType().Name;
             Title = Label;
             Description = string.Empty;
+            IsReadOnly = isReadOnly;
         }
         /// <inheritdoc/>
-        IDynamicPolicyProviderActivationContext IDynamicPolicyProviderActivationContext.AvailableFor<TScope, TItem>(IDynamicPolicy<TScope, TItem> policy)
+        IDynamicPolicyProviderActivationContext IDynamicPolicyProviderActivationContext.AvailableFor<TScope, TItem>(IDynamicPolicy<TScope, TItem> policy) where TScope : class
         {
             policy = Guard.NotNull(policy, nameof(policy));
             Toolkit.Services.Register<IDynamicPolicy<TScope, TItem>>(policy, Name);

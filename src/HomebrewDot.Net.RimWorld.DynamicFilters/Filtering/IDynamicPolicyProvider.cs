@@ -36,7 +36,7 @@ namespace HomebrewDot.Net.Rimworld.Filtering
         /// <typeparam name="TItem">The type of the item that the policy will filter.</typeparam>
         /// <param name="policy">The dynamic policy to be registered.</param>
         ///<returns>The activation context, allowing for fluent chaining</returns>
-        IDynamicPolicyProviderActivationContext AvailableFor<TScope, TItem>(IDynamicPolicy<TScope, TItem> policy);
+        IDynamicPolicyProviderActivationContext AvailableFor<TScope, TItem>(IDynamicPolicy<TScope, TItem> policy) where TScope : class;
         /// <summary>
         /// Small name for the label of the activated policies. Used in the UI to display to the player.
         /// If not provided the type name of the provider will be used, but it is recommended to provide a custom label for better user experience.

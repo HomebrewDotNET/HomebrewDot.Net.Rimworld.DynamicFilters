@@ -9,7 +9,7 @@ namespace HomebrewDot.Net.Rimworld.State
     /// <summary>
     /// Generic store for storing additional state on object.
     /// </summary>
-    public interface IStateStore<out T> : IDictionary<string, object>
+    public interface IStateStore<out T> : IDictionary<string, object> where T : class
     {
         /// <summary>
         /// The index is stored on.
@@ -23,7 +23,7 @@ namespace HomebrewDot.Net.Rimworld.State
         /// <typeparam name="TChild">The type of the child instance.</typeparam>
         /// <param name="instance">The child instance.</param>
         /// <returns>The child state store for the given instance.</returns>
-        IStateStore<TChild> GetChildStore<TChild>(TChild instance);
+        IStateStore<TChild> GetChildStore<TChild>(TChild instance) where TChild : class;
         /// <summary>
         /// Destroys the child store for the given instance.
         /// </summary>

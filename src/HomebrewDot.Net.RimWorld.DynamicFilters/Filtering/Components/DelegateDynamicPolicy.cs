@@ -13,7 +13,7 @@ namespace HomebrewDot.Net.Rimworld.Filtering.Components
     /// </summary>
     /// <typeparam name="TScope">The type of the scope for the filter.</typeparam>
     /// <typeparam name="TItem">The type of the items to be filtered.</typeparam>
-    public class DelegateDynamicPolicy<TScope, TItem> : IDynamicPolicy<TScope, TItem>
+    public class DelegateDynamicPolicy<TScope, TItem> : IDynamicPolicy<TScope, TItem> where TScope : class
     {
         // Fields
         private readonly Func<TScope, IDynamicFilter<TScope, TItem>> _filterFactory;

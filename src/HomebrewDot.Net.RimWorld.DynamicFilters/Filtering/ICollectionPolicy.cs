@@ -12,7 +12,9 @@ namespace HomebrewDot.Net.Rimworld.Filtering
     /// </summary>
     /// <typeparam name="TScope">The type of the scope.</typeparam>
     /// <typeparam name="TItem">The type of the items to be filtered.</typeparam>
-    public interface ICollectionPolicy<TScope, TItem> : IDynamicPolicy<TScope, TItem> where TItem : class
+    public interface ICollectionPolicy<TScope, TItem> : IDynamicPolicy<TScope, TItem> 
+        where TItem : class
+        where TScope : class
     {
         /// <summary>
         /// The main collection that this filter is based on. This collection is used to determine which items are included in the filter.
