@@ -282,15 +282,18 @@ namespace HomebrewDot.Net.Rimworld
             var compExplosiveType = typeof(CompProperties_Explosive);
             var explodeOnDestoyed = nameof(CompProperties_Explosive.explodeOnDestroyed);
             var explodeOnDamageTaken = nameof(CompProperties_Explosive.startWickOnDamageTaken);
+            var explodeOnDamageTakenHitPoints = nameof(CompProperties_Explosive.startWickHitPointsPercent);
             var listCount = nameof(List<DamageDef>.Count);
 
             var conditionDef = ConditionBuilder.Build(builder =>
                 builder.Compare.Comp($"{compExplosiveType.FullName}{CompReferenceType.PathSeparator}{explodeOnDestoyed}")
-                       .With.Operator(TrueOperatorType.DefaultTypeName)
+                       .With.True()
                        .Or
                        .Compare.Comp($"{compExplosiveType.FullName}{CompReferenceType.PathSeparator}{explodeOnDamageTaken}.{listCount}")
-                       .With.Operator(GreaterOperatorType.DefaultTypeName)
-                       .To.Value(0)
+                       .With.GreaterThan(0)
+                       .Or
+                       .Compare.Comp($"{compExplosiveType.FullName}{CompReferenceType.PathSeparator}{explodeOnDamageTakenHitPoints}")
+                       .With.GreaterThan(0L)
             );
 
             return conditionDef.Conditions.Select(x => SimpleFilterPolicyCondition.FromDef(x)).ToArray();
