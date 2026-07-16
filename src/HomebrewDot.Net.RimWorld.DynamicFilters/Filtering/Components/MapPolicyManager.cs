@@ -44,9 +44,11 @@ namespace HomebrewDot.Net.Rimworld.Filtering.Components
         private readonly Dictionary<string, IDynamicFilter<Map, ThingDef>> _defFilters = new Dictionary<string, IDynamicFilter<Map, ThingDef>>();
         private Dictionary<ThingFilter, string> _filterToThingCache = new Dictionary<ThingFilter, string>();
         private Dictionary<ThingFilter, string> _filterToDefCache = new Dictionary<ThingFilter, string>();
-        private Dictionary<ThingFilter, (IDynamicFilter<Map, Thing> Thing, IDynamicFilter<Map, ThingDef> Def)> _filterCache = new Dictionary<ThingFilter, (IDynamicFilter<Map, Thing>, IDynamicFilter<Map, ThingDef>)>();
+        private Dictionary<ThingFilter, (IDynamicFilter<Map, Thing> Thing, bool ThingInverted, IDynamicFilter<Map, ThingDef> Def, bool DefInverted)> _filterCache = new Dictionary<ThingFilter, (IDynamicFilter<Map, Thing> Thing, bool ThingInverted, IDynamicFilter<Map, ThingDef> Def, bool DefInverted)>();
         private Dictionary<string, string> _storageToDefFilterMap = new Dictionary<string, string>();
+        private Dictionary<string, string> _storageToInvertedDefFilterMap = new Dictionary<string, string>();
         private Dictionary<string, string> _storageToThingFilterMap = new Dictionary<string, string>();
+        private Dictionary<string, string> _storageToInvertedThingFilterMap = new Dictionary<string, string>();
 
 
         /// <inheritdoc/>
@@ -78,7 +80,7 @@ namespace HomebrewDot.Net.Rimworld.Filtering.Components
         /// <param name="filter">The filter to be managed.</param>
         /// <param name="policyName">The name of the policy to manage the filter with.</param>
         /// <returns>True if the filter is successfully managed with the policy, false otherwise.</returns>
-        public bool ManageWith(ThingFilter filter, string policyName, bool isForThing)
+        public bool ManageWith(ThingFilter filter, string policyName, bool isForThing, bool inverted)
         {
             filter = Guard.NotNull(filter, nameof(filter));
             policyName = Guard.NotNullOrWhitespace(policyName, nameof(policyName));
@@ -107,10 +109,19 @@ namespace HomebrewDot.Net.Rimworld.Filtering.Components
 
                     if (isForThing)
                     {
+                        if (inverted)
+                        {
+                            _storageToInvertedThingFilterMap[storageId] = policyName;
+                        }
+                        else
+                        {
+                            _ = _storageToInvertedThingFilterMap.Remove(storageId);
+                        }
                         if (_storageToThingFilterMap.TryGetValue(storageId, out var existingPolicy))
                         {
                             if (existingPolicy == policyName)
                             {
+                                _filterCache.Clear();
                                 if (IsVerboseEnabled) LogVerbose($"Filter {filter} is already managed by thing policy {policyName}, skipping");
                                 return true;
                             }
@@ -126,11 +137,21 @@ namespace HomebrewDot.Net.Rimworld.Filtering.Components
                     }
                     else
                     {
+                        if (inverted)
+                        {
+                            _storageToInvertedDefFilterMap[storageId] = policyName;
+                        }
+                        else
+                        {
+                            _ = _storageToInvertedDefFilterMap.Remove(storageId);
+                        }
                         if (_storageToDefFilterMap.TryGetValue(storageId, out var existingPolicy))
                         {
                             if (existingPolicy == policyName)
                             {
+                                _filterCache.Clear();
                                 if (IsVerboseEnabled) LogVerbose($"Filter {filter} is already managed by def policy {policyName}, skipping");
+                                MaintainActivePolicies(true);
                                 return true;
                             }
                             else
@@ -440,24 +461,38 @@ namespace HomebrewDot.Net.Rimworld.Filtering.Components
         /// Combined lookup for both thing and def filters in a single pass, avoiding duplicate index lookups.
         /// Returns true if either filter was found, false otherwise.
         /// </summary>
-        internal bool TryGetActiveFilters(ThingFilter filter, out IDynamicFilter<Map, Thing> thingFilter, out IDynamicFilter<Map, ThingDef> defFilter)
+        internal bool TryGetActiveFilters(ThingFilter filter, out IDynamicFilter<Map, Thing> thingFilter, out bool thingFilterInverted, out IDynamicFilter<Map, ThingDef> defFilter, out bool defFilterInverted)
         {
             thingFilter = null;
             defFilter = null;
+            thingFilterInverted = false;
+            defFilterInverted = false;
 
             if (_filterCache.TryGetValue(filter, out var cachedfilters))
             {
                 thingFilter = cachedfilters.Thing;
                 defFilter = cachedfilters.Def;
+                thingFilterInverted = cachedfilters.ThingInverted;
+                defFilterInverted = cachedfilters.DefInverted;
                 return thingFilter != null || defFilter != null;
             }
+            var table = DynamicFiltersToolkit.Indexing.ThingFilter.GetCurrentTable();
+            if (table != null && table.TryFind<ThingFilter>(filter, out var indexed))
+            {
+                var storageId = indexed.GetValue<string>(DynamicFiltersToolkitConstants.ThingFilter.StorageIdKey.Name);
+                var hasActiveDefFilter = TryGetActiveDefFilter(filter, out defFilter);
+                defFilterInverted = hasActiveDefFilter ? _storageToInvertedDefFilterMap.ContainsKey(storageId) : false;
+                var hasActiveThingFilter = TryGetActiveThingFilter(filter, out thingFilter);
+                thingFilterInverted = hasActiveThingFilter ? _storageToInvertedThingFilterMap.ContainsKey(storageId) : false;
 
-            var hasActiveDefFilter = TryGetActiveDefFilter(filter, out defFilter);
-            var hasActiveThingFilter = TryGetActiveThingFilter(filter, out thingFilter);
+                _filterCache[filter] = (thingFilter, thingFilterInverted, defFilter, defFilterInverted);
 
-            _filterCache[filter] = (thingFilter,  defFilter);
-
-            return hasActiveDefFilter || hasActiveThingFilter;
+                return hasActiveDefFilter || hasActiveThingFilter;
+            }
+            else
+            {
+                return false;
+            }
         }
 
         private void MaintainActivePolicies(bool force = false)
@@ -478,7 +513,7 @@ namespace HomebrewDot.Net.Rimworld.Filtering.Components
             List<ThingDef> allDefs = null;
             foreach (var filter in activeFilters)
             {
-                if(!table.TryFind<ThingFilter>(filter, out _))
+                if(!table.TryFind<ThingFilter>(filter, out var indexed))
                 {
                     lock (_lock)
                     {
@@ -488,20 +523,27 @@ namespace HomebrewDot.Net.Rimworld.Filtering.Components
                     }
                     continue;
                 }
+                var storageId = indexed.GetValue<string>(DynamicFiltersToolkitConstants.ThingFilter.StorageIdKey.Name);
 
-                if(_filterToDefCache.TryGetValue(filter, out var policyName) && _defFilters.TryGetValue(policyName, out var defFilter))
+                if (_filterToDefCache.TryGetValue(filter, out var policyName) && _defFilters.TryGetValue(policyName, out var defFilter))
                 {
                     var wasUpdated = Invoking.Safe(() => defFilter.Update(StateStore.GetChildStore(map)), false);
 
                     if (wasUpdated || force)
                     {
+                        var inverted = _storageToInvertedDefFilterMap.ContainsKey(storageId);
                         allDefs ??= DefDatabase<ThingDef>.AllDefsListForReading;
                         if (IsVerboseEnabled) LogVerbose($"Updating def allow list of size {allDefs.Count} using policy {policyName} on map {map} for filter {filter}");
                         var stopwatch = System.Diagnostics.Stopwatch.StartNew();
                         for (int i = 0; i < allDefs.Count; i++)
                         {
                             var def = allDefs[i];
-                            Invoking.Safe(() => filter.SetAllow(def, defFilter.Filter(def)));
+                            var isAllowed = defFilter.Filter(def);
+                            if (inverted)
+                            {
+                                isAllowed = !isAllowed;
+                            }
+                            Invoking.Safe(() => filter.SetAllow(def, isAllowed));
                         }
                         stopwatch.Stop();
                         if (IsPerformanceEnabled) LogPerformance($"Finished updating def allow list of size {allDefs.Count} for filter {filter} using policy {policyName} in {stopwatch.Elapsed.TotalMilliseconds}ms");
@@ -656,6 +698,11 @@ namespace HomebrewDot.Net.Rimworld.Filtering.Components
             _storageToDefFilterMap ??= new Dictionary<string, string>();
             Scribe_Collections.Look(ref _storageToThingFilterMap, "filterToThingPolicyMap", LookMode.Value, LookMode.Value);
             _storageToThingFilterMap ??= new Dictionary<string, string>();
+            Scribe_Collections.Look(ref _storageToInvertedDefFilterMap, "filterToInvertedPolicyMap", LookMode.Value, LookMode.Value);
+            _storageToInvertedDefFilterMap ??= new Dictionary<string, string>();
+            Scribe_Collections.Look(ref _storageToInvertedThingFilterMap, "filterToInvertedThingPolicyMap", LookMode.Value, LookMode.Value);
+            _storageToInvertedThingFilterMap ??= new Dictionary<string, string>();
+
             if (Scribe.mode == LoadSaveMode.PostLoadInit)
             {
                 _filterToDefCache.Clear();

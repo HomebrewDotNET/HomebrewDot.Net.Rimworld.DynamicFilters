@@ -79,7 +79,7 @@ namespace HomebrewDot.Net.Rimworld.Storage.Models
                 return true;
             }
 
-            bool anyFilterActive = policyManager.TryGetActiveFilters(__instance, out var activeFilter, out var activeDefFilter);
+            bool anyFilterActive = policyManager.TryGetActiveFilters(__instance, out var activeFilter, out var activeFilterInverted, out var activeDefFilter, out var activeDefFilterInverted);
             if(!anyFilterActive)
             {
                 return true;
@@ -87,17 +87,21 @@ namespace HomebrewDot.Net.Rimworld.Storage.Models
 
             bool thingResult = true;
             bool defResult = true;
-            string thingLabel = "*";
-            string defLabel = "*";
             if (activeFilter != null)
             {
                 thingResult = activeFilter.Filter(t);
-                thingLabel = thingResult.ToString();
+                if (activeFilterInverted)
+                {
+                    thingResult = !thingResult;
+                }
             }
             if (activeDefFilter != null)
             {
                 defResult = activeDefFilter.Filter(t.def);
-                defLabel = defResult.ToString();
+                if (activeDefFilterInverted)
+                {
+                    defResult = !defResult;
+                }
             }
 
             __result = thingResult && defResult;
@@ -147,7 +151,9 @@ namespace HomebrewDot.Net.Rimworld.Storage.Models
             if (hasThings)
             {
                 var barRect = new Rect(rect.x, cursorY, rect.width, PolicyBarHeight);
-                DrawPolicyBar(barRect, manager, filter, thingPolicies, isForThing: true);
+                manager.TryGetManagedPolicyName(filter, true, out var thingPolicyName);
+                manager.TryGetActiveFilters(filter, out _, out var thingInverted, out _, out _);
+                DrawPolicyBar(barRect, manager, filter, thingPolicies, thingPolicyName, thingInverted, true);
                 cursorY = barRect.yMax + PolicyBarGap;
                 barsDrawn++;
             }
@@ -156,7 +162,9 @@ namespace HomebrewDot.Net.Rimworld.Storage.Models
             if (hasDefs)
             {
                 var barRect = new Rect(rect.x, cursorY, rect.width, PolicyBarHeight);
-                DrawPolicyBar(barRect, manager, filter, defPolicies, isForThing: false);
+                manager.TryGetManagedPolicyName(filter, false, out var defPolicyName);
+                manager.TryGetActiveFilters(filter, out _, out _, out _, out var defInverted);
+                DrawPolicyBar(barRect, manager, filter, defPolicies, defPolicyName, defInverted, false);
                 cursorY = barRect.yMax + PolicyBarGap;
                 barsDrawn++;
             }
@@ -166,25 +174,46 @@ namespace HomebrewDot.Net.Rimworld.Storage.Models
         }
 
         private static void DrawPolicyBar(Rect barRect, MapPolicyManager manager, ThingFilter filter,
-            IReadOnlyCollection<string> availablePolicies, bool isForThing)
+            IReadOnlyCollection<string> availablePolicies, string selectedPolicyName, bool inverted, bool isForThing)
         {
-            var prefix = isForThing ? "Allow" : "Select";
-            manager.TryGetManagedPolicyName(filter, isForThing, out var selectedPolicyName);
             var displayName = string.IsNullOrWhiteSpace(selectedPolicyName) ? "*" : selectedPolicyName;
+            var hasPolicy = !string.IsNullOrWhiteSpace(selectedPolicyName);
+            var prefix = (isForThing, inverted) switch
+            {
+                (true, false) => "Allow",
+                (true, true) => "Reject",
+                (false, false) => "Select",
+                (false, true) => "Deselect"
+            };
+
+            // Full bar background
+            Widgets.DrawMenuSection(barRect);
+
+            // Checkbox on the left
+            const float CheckboxSize = 24f;
+            var checkOn = !inverted;
+            Widgets.Checkbox(new Vector2(barRect.x + 4f, barRect.y), ref checkOn, CheckboxSize);
+            if (checkOn == inverted && hasPolicy)
+            {
+                manager.ManageWith(filter, selectedPolicyName, isForThing, !checkOn);
+            }
+
+            // Label + dropdown to the right of the checkbox
+            var dropdownRect = new Rect(barRect.x + CheckboxSize + 4f, barRect.y, barRect.width - CheckboxSize - 8f, barRect.height);
             var fullLabel = $"{prefix}: {displayName}";
 
             // Truncate if too long
             var truncatedLabel = fullLabel;
             var needsTooltip = false;
             var labelWidth = Text.CalcSize(fullLabel).x;
-            var availableWidth = barRect.width - 8f;
+            var availableWidth = dropdownRect.width - 8f;
             if (labelWidth > availableWidth)
             {
                 needsTooltip = true;
                 truncatedLabel = TruncateLabel(fullLabel, availableWidth);
             }
 
-            if (Widgets.ButtonInvisible(barRect))
+            if (Widgets.ButtonInvisible(dropdownRect))
             {
                 var options = new List<FloatMenuOption>
                 {
@@ -194,19 +223,18 @@ namespace HomebrewDot.Net.Rimworld.Storage.Models
                 foreach (var policyName in availablePolicies)
                 {
                     var capturedPolicyName = policyName;
-                    options.Add(new FloatMenuOption(policyName, () => manager.ManageWith(filter, capturedPolicyName, isForThing)));
+                    options.Add(new FloatMenuOption(policyName, () => manager.ManageWith(filter, capturedPolicyName, isForThing, inverted)));
                 }
 
                 Find.WindowStack.Add(new FloatMenu(options));
             }
 
-            Widgets.DrawMenuSection(barRect);
-            var labelRect = barRect.ContractedBy(4f);
+            var labelRect = dropdownRect.ContractedBy(4f);
             Widgets.Label(labelRect, truncatedLabel);
 
-            if (needsTooltip && Mouse.IsOver(barRect))
+            if (needsTooltip && Mouse.IsOver(dropdownRect))
             {
-                TooltipHandler.TipRegion(barRect, fullLabel);
+                TooltipHandler.TipRegion(dropdownRect, fullLabel);
             }
         }
 
