@@ -29,6 +29,38 @@ namespace HomebrewDot.Net.Rimworld.UI.Settings.Tabs
         }
 
         /// <summary>
+        /// Draws a read-only view showing only the title and description.
+        /// </summary>
+        public void DrawReadOnly(Rect rect, string title, string description, string emptyMessage)
+        {
+            Widgets.DrawMenuSection(rect);
+            var innerRect = rect.ContractedBy(8f);
+
+            if (string.IsNullOrWhiteSpace(title))
+            {
+                Widgets.Label(innerRect, emptyMessage);
+                return;
+            }
+
+            var cursorY = innerRect.y;
+            Widgets.Label(new Rect(innerRect.x, cursorY, innerRect.width, 24f), title);
+            cursorY += 26f;
+
+            var descLabelWidth = innerRect.width - 16f;
+            var descNaturalHeight = Text.CalcHeight(description, descLabelWidth);
+            var maxDescHeight = Mathf.Floor(innerRect.height * 0.4f);
+            var descHeight = Mathf.Min(descNaturalHeight, maxDescHeight);
+            var needsScrollbar = descNaturalHeight > maxDescHeight;
+
+            var descOutRect = new Rect(innerRect.x, cursorY, innerRect.width, descHeight);
+            var descViewWidth = needsScrollbar ? descOutRect.width - 16f : descOutRect.width;
+            var descViewRect = new Rect(0f, 0f, descViewWidth, Mathf.Max(descNaturalHeight, descHeight));
+            Widgets.BeginScrollView(descOutRect, ref _descriptionScroll, descViewRect);
+            Widgets.Label(new Rect(0f, 0f, descViewRect.width, descViewRect.height), description);
+            Widgets.EndScrollView();
+        }
+
+        /// <summary>
         /// Draws a shared editor layout for template-backed settings.
         /// </summary>
         public DrawResult Draw(
@@ -55,13 +87,16 @@ namespace HomebrewDot.Net.Rimworld.UI.Settings.Tabs
             Widgets.Label(new Rect(innerRect.x, cursorY, innerRect.width, 24f), title);
             cursorY += 26f;
 
-            var descNaturalHeight = Text.CalcHeight(description, innerRect.width);
+            var descLabelWidth = innerRect.width - 16f;
+            var descNaturalHeight = Text.CalcHeight(description, descLabelWidth);
             var maxDescHeight = Mathf.Floor(innerRect.height * 0.3f);
             var descHeight = Mathf.Min(descNaturalHeight, maxDescHeight);
+            var needsScrollbar = descNaturalHeight > maxDescHeight;
 
             var descOutRect = new Rect(innerRect.x, cursorY, innerRect.width, descHeight);
+            var descViewWidth = needsScrollbar ? descOutRect.width - 16f : descOutRect.width;
             var descViewHeight = Mathf.Max(descNaturalHeight, descHeight);
-            var descViewRect = new Rect(0f, 0f, descOutRect.width - 16f, descViewHeight);
+            var descViewRect = new Rect(0f, 0f, descViewWidth, descViewHeight);
             Widgets.BeginScrollView(descOutRect, ref _descriptionScroll, descViewRect);
             Widgets.Label(new Rect(0f, 0f, descViewRect.width, descViewHeight), description);
             Widgets.EndScrollView();

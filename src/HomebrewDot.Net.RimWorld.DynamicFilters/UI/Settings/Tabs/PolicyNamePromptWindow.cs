@@ -59,7 +59,9 @@ namespace HomebrewDot.Net.Rimworld.UI.Settings.Tabs
             {
                 Close();
             }
-            Widgets.Label(cancelRect.ContractedBy(4f), "Cancel");
+            Text.Anchor = TextAnchor.MiddleCenter;
+            Widgets.Label(cancelRect, "Cancel");
+            Text.Anchor = TextAnchor.UpperLeft;
 
             Widgets.DrawMenuSection(saveRect);
             if (Widgets.ButtonInvisible(saveRect))
@@ -81,7 +83,9 @@ namespace HomebrewDot.Net.Rimworld.UI.Settings.Tabs
                     }
                 }
             }
-            Widgets.Label(saveRect.ContractedBy(4f), "Save");
+            Text.Anchor = TextAnchor.MiddleCenter;
+            Widgets.Label(saveRect, "Save");
+            Text.Anchor = TextAnchor.UpperLeft;
         }
     }
 }

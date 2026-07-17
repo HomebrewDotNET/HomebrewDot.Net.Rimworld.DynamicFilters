@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using HomebrewDot.Net.Rimworld.Configuration;
 using HomebrewDot.Net.Rimworld.Filtering;
 using UnityEngine;
 using Verse;
@@ -10,25 +11,30 @@ using Verse;
 namespace HomebrewDot.Net.Rimworld.Configuration.Templates
 {
     /// <summary>
-    /// Base class for templates without input.
+    /// A policy that does not require any custom options.
     /// </summary>
-    public abstract class PolicyPreset : IDynamicPolicyTemplate
+    public abstract class Preset : IDynamicPolicyTemplate
     {
         /// <inheritdoc/>
         public abstract string StorageKey { get; }
-        /// <inheritdoc cref="IDynamicPolicyTemplate.Create(IExposable)"/>
-        public abstract IDynamicPolicyProvider Create();
-        /// <inheritdoc />
+        /// <inheritdoc/>
+        public bool Singleton => true;
+
+        /// <inheritdoc/>
         public IDynamicPolicyProvider Create(IExposable settings)
             => Create();
+        /// <inheritdoc cref="Create(IExposable)"/>
+        public abstract IDynamicPolicyProvider Create();
+
         /// <inheritdoc/>
         public void DrawSettings(Rect rect, ref IExposable settings)
         {
-            settings ??= new NullSettings();
         }
         /// <inheritdoc/>
         public string GetLongDescription(IExposable settings)
-            => GetShortDescription();
+            => GetLongDescription();
+        /// <inheritdoc cref="GetLongDescription(IExposable)"/>
+        public abstract string GetLongDescription();
         /// <inheritdoc/>
         public abstract string GetShortDescription();
         /// <inheritdoc/>
@@ -39,7 +45,8 @@ namespace HomebrewDot.Net.Rimworld.Configuration.Templates
             return Array.Empty<string>();
         }
 
-        private class NullSettings : IExposable
+
+        private class PresetNullOptions : IExposable
         {
             public void ExposeData()
             {

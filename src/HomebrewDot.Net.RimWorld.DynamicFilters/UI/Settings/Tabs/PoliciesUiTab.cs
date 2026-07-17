@@ -19,10 +19,13 @@ namespace HomebrewDot.Net.Rimworld.UI.Settings.Tabs
         private readonly TemplatePolicyEditorPanel _editorPanel = new TemplatePolicyEditorPanel();
 
         private Vector2 _policyListScroll = Vector2.zero;
-        private string _lockedPolicyName;
+        private string _selectedPolicyName;
+        private string _editingPolicyName;
         private IDynamicPolicyTemplate _editingTemplate;
         private IExposable _workingSettings;
         private string[] _validationErrors = Array.Empty<string>();
+
+        private bool IsEditing => !string.IsNullOrWhiteSpace(_editingPolicyName);
 
         /// <inheritdoc/>
         public string Title => "Policies";
@@ -42,12 +45,13 @@ namespace HomebrewDot.Net.Rimworld.UI.Settings.Tabs
 
         private ActivatedPolicies ResolveSelectedPolicy(List<ActivatedPolicies> policies)
         {
-            if (string.IsNullOrWhiteSpace(_lockedPolicyName))
+            var lookupName = IsEditing ? _editingPolicyName : _selectedPolicyName;
+            if (string.IsNullOrWhiteSpace(lookupName))
             {
                 return null;
             }
 
-            return policies.FirstOrDefault(x => x.Name == _lockedPolicyName);
+            return policies.FirstOrDefault(x => x.Name == lookupName);
         }
 
         private void DrawPolicyList(Rect rect, List<ActivatedPolicies> policies, ActivatedPolicies selectedPolicy)
@@ -66,14 +70,14 @@ namespace HomebrewDot.Net.Rimworld.UI.Settings.Tabs
             {
                 var policy = policies[i];
                 var rowRect = new Rect(0f, y, listViewRect.width, 48f);
-                var canSelect = selectedPolicy == null || selectedPolicy.Name == policy.Name;
+                var isSelected = selectedPolicy != null && selectedPolicy.Name == policy.Name;
 
                 if (Mouse.IsOver(rowRect))
                 {
                     Widgets.DrawHighlight(rowRect);
                 }
 
-                if (selectedPolicy != null && selectedPolicy.Name == policy.Name)
+                if (isSelected)
                 {
                     Widgets.DrawHighlightSelected(rowRect);
                 }
@@ -82,11 +86,21 @@ namespace HomebrewDot.Net.Rimworld.UI.Settings.Tabs
                 if(policy.Label != policy.Name)
                     Widgets.Label(new Rect(rowRect.x + 4f, rowRect.y + 22f, rowRect.width - 8f, 24f), policy.Label);
 
-                if (canSelect && Widgets.ButtonInvisible(rowRect))
+                if (Widgets.ButtonInvisible(rowRect))
                 {
-                    _lockedPolicyName = policy.Name;
-                    _validationErrors = Array.Empty<string>();
-                    LoadPolicyEditorState(policy.Name);
+                    if (IsEditing)
+                    {
+                        if (isSelected)
+                        {
+                            // Clicking the already-editing item is a no-op
+                        }
+                    }
+                    else
+                    {
+                        _selectedPolicyName = policy.Name;
+                        _validationErrors = Array.Empty<string>();
+                        LoadPolicyInfo(policy.Name);
+                    }
                 }
 
                 y += 52f;
@@ -96,59 +110,54 @@ namespace HomebrewDot.Net.Rimworld.UI.Settings.Tabs
 
         private void DrawSelectedPolicy(Rect rect, ActivatedPolicies selectedPolicy)
         {
-            var editorDescription = _editingTemplate != null
-                ? _editingTemplate.GetLongDescription(_workingSettings)
-                : (selectedPolicy?.Description ?? string.Empty);
-
-            var drawResult = _editorPanel.Draw(
-                rect,
-                _editingTemplate,
-                selectedPolicy?.Title ?? string.Empty,
-                editorDescription,
-                ref _workingSettings,
-                _validationErrors,
-                selectedPolicy == null
-                    ? "Select a policy from the list to view or edit it."
-                    : "This policy is not template-backed, so only delete is available.");
+            Widgets.DrawMenuSection(rect);
+            var innerRect = rect.ContractedBy(8f);
 
             if (selectedPolicy == null)
             {
+                Widgets.Label(innerRect, "Select a policy from the list to view or edit it.");
                 return;
             }
 
-            DrawButtons(drawResult.InnerRect, selectedPolicy, drawResult.HasTemplate, drawResult.ButtonsHeight);
+            if (IsEditing)
+            {
+                DrawEditingMode(rect, selectedPolicy, innerRect);
+            }
+            else
+            {
+                DrawReadOnlyMode(rect, selectedPolicy, innerRect);
+            }
         }
 
-        private void DrawButtons(Rect innerRect, ActivatedPolicies selectedPolicy, bool showSave, float buttonsHeight)
+        private void DrawReadOnlyMode(Rect rect, ActivatedPolicies selectedPolicy, Rect innerRect)
         {
+            var description = _editingTemplate != null
+                ? _editingTemplate.GetLongDescription(_workingSettings)
+                : (selectedPolicy.Description ?? string.Empty);
+
+            var title = selectedPolicy.Title ?? selectedPolicy.Name;
+            _editorPanel.DrawReadOnly(rect, title, description, string.Empty);
+
             var buttonWidth = 120f;
+            var buttonsHeight = 34f;
             var y = innerRect.yMax - buttonsHeight;
 
-            var cancelRect = new Rect(innerRect.x, y, buttonWidth, buttonsHeight);
-            Widgets.DrawMenuSection(cancelRect);
-            if (Widgets.ButtonInvisible(cancelRect))
+            if (_editingTemplate != null)
             {
-                _lockedPolicyName = null;
-                _editingTemplate = null;
-                _workingSettings = null;
-                _validationErrors = Array.Empty<string>();
-            }
-            Widgets.Label(cancelRect.ContractedBy(4f), "Cancel");
-
-            var nextX = cancelRect.xMax + 8f;
-            if (showSave)
-            {
-                var saveRect = new Rect(nextX, y, buttonWidth, buttonsHeight);
-                Widgets.DrawMenuSection(saveRect);
-                if (Widgets.ButtonInvisible(saveRect))
+                var editRect = new Rect(innerRect.x, y, buttonWidth, buttonsHeight);
+                Widgets.DrawMenuSection(editRect);
+                if (Widgets.ButtonInvisible(editRect))
                 {
-                    RequestSavePolicyEdits(selectedPolicy);
+                    _editingPolicyName = selectedPolicy.Name;
+                    _validationErrors = Array.Empty<string>();
+                    LoadPolicyEditorState(selectedPolicy.Name);
                 }
-                Widgets.Label(saveRect.ContractedBy(4f), "Save");
-                nextX = saveRect.xMax + 8f;
+                Text.Anchor = TextAnchor.MiddleCenter;
+                Widgets.Label(editRect, "Edit");
+                Text.Anchor = TextAnchor.UpperLeft;
             }
 
-            var deleteRect = new Rect(nextX, y, buttonWidth, buttonsHeight);
+            var deleteRect = new Rect(innerRect.x + (_editingTemplate != null ? buttonWidth + 8f : 0), y, buttonWidth, buttonsHeight);
             Widgets.DrawMenuSection(deleteRect);
             if (Widgets.ButtonInvisible(deleteRect))
             {
@@ -157,7 +166,97 @@ namespace HomebrewDot.Net.Rimworld.UI.Settings.Tabs
                     $"Are you sure you want to delete policy '{selectedPolicy.Name}'?",
                     () => DeletePolicy(selectedPolicy.Name)));
             }
-            Widgets.Label(deleteRect.ContractedBy(4f), "Delete");
+            Text.Anchor = TextAnchor.MiddleCenter;
+            Widgets.Label(deleteRect, "Delete");
+            Text.Anchor = TextAnchor.UpperLeft;
+        }
+
+        private void DrawEditingMode(Rect rect, ActivatedPolicies selectedPolicy, Rect innerRect)
+        {
+            var editorDescription = _editingTemplate != null
+                ? _editingTemplate.GetLongDescription(_workingSettings)
+                : (selectedPolicy.Description ?? string.Empty);
+
+            var drawResult = _editorPanel.Draw(
+                rect,
+                _editingTemplate,
+                selectedPolicy.Title ?? selectedPolicy.Name,
+                editorDescription,
+                ref _workingSettings,
+                _validationErrors,
+                string.Empty);
+
+            var buttonWidth = 120f;
+            var buttonsHeight = drawResult.ButtonsHeight;
+            var y = innerRect.yMax - buttonsHeight;
+
+            var cancelRect = new Rect(innerRect.x, y, buttonWidth, buttonsHeight);
+            Widgets.DrawMenuSection(cancelRect);
+            if (Widgets.ButtonInvisible(cancelRect))
+            {
+                CancelEditing();
+            }
+            Text.Anchor = TextAnchor.MiddleCenter;
+            Widgets.Label(cancelRect, "Cancel");
+            Text.Anchor = TextAnchor.UpperLeft;
+
+            if (drawResult.HasTemplate)
+            {
+                var saveRect = new Rect(cancelRect.xMax + 8f, y, buttonWidth, buttonsHeight);
+                Widgets.DrawMenuSection(saveRect);
+                if (Widgets.ButtonInvisible(saveRect))
+                {
+                    RequestSavePolicyEdits(selectedPolicy);
+                }
+                Text.Anchor = TextAnchor.MiddleCenter;
+                Widgets.Label(saveRect, "Save");
+                Text.Anchor = TextAnchor.UpperLeft;
+            }
+
+            var deleteRect = new Rect(innerRect.xMax - buttonWidth, y, buttonWidth, buttonsHeight);
+            Widgets.DrawMenuSection(deleteRect);
+            if (Widgets.ButtonInvisible(deleteRect))
+            {
+                Find.WindowStack.Add(new ConfirmWindow(
+                    "Delete Policy",
+                    $"Are you sure you want to delete policy '{selectedPolicy.Name}'?",
+                    () => DeletePolicy(selectedPolicy.Name)));
+            }
+            Text.Anchor = TextAnchor.MiddleCenter;
+            Widgets.Label(deleteRect, "Delete");
+            Text.Anchor = TextAnchor.UpperLeft;
+        }
+
+        private void CancelEditing()
+        {
+            _editingPolicyName = null;
+            _workingSettings = null;
+            _validationErrors = Array.Empty<string>();
+            // Reload read-only info for the still-selected policy
+            if (!string.IsNullOrWhiteSpace(_selectedPolicyName))
+            {
+                LoadPolicyInfo(_selectedPolicyName);
+            }
+        }
+
+        private void LoadPolicyInfo(string policyName)
+        {
+            _editingTemplate = null;
+            _workingSettings = null;
+
+            var activeTemplate = DynamicFiltersToolkit.Settings.ActiveTemplates?.FirstOrDefault(x => x.PolicyName == policyName);
+            if (activeTemplate == null)
+            {
+                return;
+            }
+
+            _editingTemplate = DynamicFiltersToolkit.Templates.All.FirstOrDefault(x => x.StorageKey == activeTemplate.StorageKey);
+            if (_editingTemplate == null)
+            {
+                return;
+            }
+
+            _workingSettings = activeTemplate.Settings;
         }
 
         private void LoadPolicyEditorState(string policyName)
@@ -230,9 +329,14 @@ namespace HomebrewDot.Net.Rimworld.UI.Settings.Tabs
 
             DynamicFiltersToolkit.Instance.WriteSettings();
             _validationErrors = Array.Empty<string>();
-            _lockedPolicyName = null;
+            _editingPolicyName = null;
             _editingTemplate = null;
             _workingSettings = null;
+            // Reload read-only info after save
+            if (!string.IsNullOrWhiteSpace(_selectedPolicyName))
+            {
+                LoadPolicyInfo(_selectedPolicyName);
+            }
         }
 
         private void DeletePolicy(string policyName)
@@ -241,7 +345,8 @@ namespace HomebrewDot.Net.Rimworld.UI.Settings.Tabs
             DynamicFiltersToolkit.Settings.ActiveTemplates?.RemoveAll(x => x.PolicyName == policyName);
             DynamicFiltersToolkit.Instance.WriteSettings();
 
-            _lockedPolicyName = null;
+            _selectedPolicyName = null;
+            _editingPolicyName = null;
             _editingTemplate = null;
             _workingSettings = null;
             _validationErrors = Array.Empty<string>();

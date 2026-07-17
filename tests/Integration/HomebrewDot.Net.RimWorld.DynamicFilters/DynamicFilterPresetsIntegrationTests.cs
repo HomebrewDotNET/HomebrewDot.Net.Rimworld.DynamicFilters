@@ -44,7 +44,13 @@ namespace HomebrewDot.Net.RimWorld.DynamicFilters.Tests
 
         private void ActivateAndTrack(string policyName, SimpleFilterPolicyCondition[] conditions)
         {
-            DynamicFilterPresets.ActivateSimple(policyName, conditions);
+            var settings = new SimpleFilterPolicySettings
+            {
+                Conditions = conditions.ToList(),
+                ThingDef = true,
+                DisallowMatching = false
+            };
+            DynamicFiltersToolkit.Policies.TryActivateProvider(policyName, SimpleFilterPolicy.Instance.Create(settings));
             _activatedPolicies.Add(policyName);
         }
 
@@ -473,7 +479,7 @@ namespace HomebrewDot.Net.RimWorld.DynamicFilters.Tests
             var conditions = DynamicFilterPresets.CreatePropertyCondition(
                 nameof(Tentity<bool>.Boolean),
                 EqualsOperatorType.DefaultTypeName, true);
-            var collector = BuildTentityCollector<bool>(DynamicFilterPresets.ExplosivePreset, "TentityBool", conditions);
+            var collector = BuildTentityCollector<bool>(DynamicFilterPresets.ExplosivesPreset, "TentityBool", conditions);
             var items = collector?.GetAll().Select(i => i.text).ToArray() ?? Array.Empty<string>();
             Assert.Contains(TentityMatchingText, items);
         }
@@ -482,8 +488,8 @@ namespace HomebrewDot.Net.RimWorld.DynamicFilters.Tests
         public void ExplosivePreset_DoesNotMatchNonExplosiveDef()
         {
             var conditions = CreateExplosiveConditions();
-            ActivateAndTrack(DynamicFilterPresets.ExplosivePreset, conditions);
-            var defNames = GetCollectedDefNames(GetCollector(DynamicFilterPresets.ExplosivePreset));
+            ActivateAndTrack(DynamicFilterPresets.ExplosivesPreset, conditions);
+            var defNames = GetCollectedDefNames(GetCollector(DynamicFilterPresets.ExplosivesPreset));
             Assert.DoesNotContain(GenericItemDefName, defNames);
             Assert.DoesNotContain(FoodDefName, defNames);
         }

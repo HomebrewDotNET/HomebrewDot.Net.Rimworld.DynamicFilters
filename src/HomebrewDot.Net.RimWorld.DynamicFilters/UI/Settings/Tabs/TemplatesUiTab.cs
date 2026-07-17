@@ -19,9 +19,34 @@ namespace HomebrewDot.Net.Rimworld.UI.Settings.Tabs
         private readonly TemplatePolicyEditorPanel _editorPanel = new TemplatePolicyEditorPanel();
 
         private Vector2 _templateListScroll = Vector2.zero;
-        private string _lockedTemplateStorageKey;
+        private string _selectedStorageKey;
+        private string _editingStorageKey;
         private IExposable _workingSettings;
         private string[] _validationErrors = Array.Empty<string>();
+
+        private bool IsEditing => !string.IsNullOrWhiteSpace(_editingStorageKey);
+
+        /// <summary>
+        /// Returns the name of an existing active policy for a singleton template, or null if none exists or the template is not a singleton.
+        /// </summary>
+        private static string GetSingletonActivePolicyName(IDynamicPolicyTemplate template)
+        {
+            if (template == null || !template.Singleton)
+            {
+                return null;
+            }
+
+            var activeTemplates = DynamicFiltersToolkit.Settings.ActiveTemplates;
+            if (activeTemplates == null)
+            {
+                return null;
+            }
+
+            return activeTemplates
+                .Where(x => x.StorageKey == template.StorageKey)
+                .Select(x => x.PolicyName)
+                .FirstOrDefault();
+        }
 
         /// <inheritdoc/>
         public string Title => "Templates";
@@ -41,12 +66,13 @@ namespace HomebrewDot.Net.Rimworld.UI.Settings.Tabs
 
         private IDynamicPolicyTemplate ResolveSelectedTemplate(List<IDynamicPolicyTemplate> templates)
         {
-            if (string.IsNullOrWhiteSpace(_lockedTemplateStorageKey))
+            var lookupKey = IsEditing ? _editingStorageKey : _selectedStorageKey;
+            if (string.IsNullOrWhiteSpace(lookupKey))
             {
                 return null;
             }
 
-            return templates.FirstOrDefault(t => t.StorageKey == _lockedTemplateStorageKey);
+            return templates.FirstOrDefault(t => t.StorageKey == lookupKey);
         }
 
         private void DrawTemplateList(Rect rect, List<IDynamicPolicyTemplate> templates, IDynamicPolicyTemplate selectedTemplate)
@@ -65,26 +91,40 @@ namespace HomebrewDot.Net.Rimworld.UI.Settings.Tabs
             {
                 var template = templates[i];
                 var rowRect = new Rect(0f, y, listViewRect.width, 48f);
-                var canSelect = selectedTemplate == null || selectedTemplate.StorageKey == template.StorageKey;
+                var isSelected = selectedTemplate != null && selectedTemplate.StorageKey == template.StorageKey;
 
                 if (Mouse.IsOver(rowRect))
                 {
                     Widgets.DrawHighlight(rowRect);
                 }
 
-                if (selectedTemplate != null && selectedTemplate.StorageKey == template.StorageKey)
+                if (isSelected)
                 {
                     Widgets.DrawHighlightSelected(rowRect);
                 }
 
                 Widgets.Label(new Rect(rowRect.x + 4f, rowRect.y + 2f, rowRect.width - 8f, 22f), template.GetTitle());
-                Widgets.Label(new Rect(rowRect.x + 4f, rowRect.y + 22f, rowRect.width - 8f, 24f), template.GetShortDescription());
+                var existingPolicyName = GetSingletonActivePolicyName(template);
+                var descText = existingPolicyName != null
+                    ? $"(Active: {existingPolicyName}) {template.GetShortDescription()}"
+                    : template.GetShortDescription();
+                Widgets.Label(new Rect(rowRect.x + 4f, rowRect.y + 22f, rowRect.width - 8f, 24f), descText);
 
-                if (canSelect && Widgets.ButtonInvisible(rowRect))
+                if (Widgets.ButtonInvisible(rowRect))
                 {
-                    _lockedTemplateStorageKey = template.StorageKey;
-                    _workingSettings = null;
-                    _validationErrors = Array.Empty<string>();
+                    if (IsEditing)
+                    {
+                        if (isSelected)
+                        {
+                            // Clicking the already-editing item is a no-op
+                        }
+                    }
+                    else
+                    {
+                        _selectedStorageKey = template.StorageKey;
+                        _workingSettings = null;
+                        _validationErrors = Array.Empty<string>();
+                    }
                 }
 
                 y += 52f;
@@ -94,21 +134,69 @@ namespace HomebrewDot.Net.Rimworld.UI.Settings.Tabs
 
         private void DrawSelectedTemplate(Rect rect, IDynamicPolicyTemplate selectedTemplate)
         {
-            var drawResult = _editorPanel.Draw(
-                rect,
-                selectedTemplate,
-                selectedTemplate?.GetTitle() ?? string.Empty,
-                selectedTemplate?.GetLongDescription(_workingSettings) ?? string.Empty,
-                ref _workingSettings,
-                _validationErrors,
-                "Select a template from the list to configure and create a policy.");
+            Widgets.DrawMenuSection(rect);
+            var innerRect = rect.ContractedBy(8f);
 
-            if (!drawResult.HasTemplate)
+            if (selectedTemplate == null)
             {
+                Widgets.Label(innerRect, "Select a template from the list to configure and create a policy.");
                 return;
             }
 
-            var innerRect = drawResult.InnerRect;
+            if (IsEditing)
+            {
+                DrawEditingMode(rect, selectedTemplate, innerRect);
+            }
+            else
+            {
+                DrawReadOnlyMode(rect, selectedTemplate, innerRect);
+            }
+        }
+
+        private void DrawReadOnlyMode(Rect rect, IDynamicPolicyTemplate selectedTemplate, Rect innerRect)
+        {
+            var description = selectedTemplate.GetShortDescription();
+            _editorPanel.DrawReadOnly(rect, selectedTemplate.GetTitle(), description, string.Empty);
+
+            var existingPolicyName = GetSingletonActivePolicyName(selectedTemplate);
+            var buttonWidth = 120f;
+            var buttonsHeight = 34f;
+            var y = innerRect.yMax - buttonsHeight;
+
+            if (existingPolicyName != null)
+            {
+                var statusRect = new Rect(innerRect.x, y, innerRect.width, buttonsHeight);
+                GUI.color = Color.green;
+                Widgets.Label(statusRect, $"Already active as policy '{existingPolicyName}'.");
+                GUI.color = Color.white;
+            }
+            else
+            {
+                var editRect = new Rect(innerRect.x, y, buttonWidth, buttonsHeight);
+                Widgets.DrawMenuSection(editRect);
+                if (Widgets.ButtonInvisible(editRect))
+                {
+                    _editingStorageKey = selectedTemplate.StorageKey;
+                    _workingSettings = null;
+                    _validationErrors = Array.Empty<string>();
+                }
+                Text.Anchor = TextAnchor.MiddleCenter;
+                Widgets.Label(editRect, "Edit");
+                Text.Anchor = TextAnchor.UpperLeft;
+            }
+        }
+
+        private void DrawEditingMode(Rect rect, IDynamicPolicyTemplate selectedTemplate, Rect innerRect)
+        {
+            var drawResult = _editorPanel.Draw(
+                rect,
+                selectedTemplate,
+                selectedTemplate.GetTitle(),
+                selectedTemplate.GetLongDescription(_workingSettings),
+                ref _workingSettings,
+                _validationErrors,
+                string.Empty);
+
             var buttonsHeight = drawResult.ButtonsHeight;
             var buttonWidth = 120f;
             var cancelRect = new Rect(innerRect.x, innerRect.yMax - buttonsHeight, buttonWidth, buttonsHeight);
@@ -117,11 +205,13 @@ namespace HomebrewDot.Net.Rimworld.UI.Settings.Tabs
             Widgets.DrawMenuSection(cancelRect);
             if (Widgets.ButtonInvisible(cancelRect))
             {
-                _lockedTemplateStorageKey = null;
+                _editingStorageKey = null;
                 _workingSettings = null;
                 _validationErrors = Array.Empty<string>();
             }
-            Widgets.Label(cancelRect.ContractedBy(4f), "Cancel");
+            Text.Anchor = TextAnchor.MiddleCenter;
+            Widgets.Label(cancelRect, "Cancel");
+            Text.Anchor = TextAnchor.UpperLeft;
 
             Widgets.DrawMenuSection(saveRect);
             if (Widgets.ButtonInvisible(saveRect))
@@ -129,11 +219,21 @@ namespace HomebrewDot.Net.Rimworld.UI.Settings.Tabs
                 _validationErrors = UiExposableUtility.Validate(selectedTemplate, _workingSettings);
                 if (_validationErrors.Length == 0)
                 {
-                    var suggestedName = selectedTemplate.GetTitle();
-                    Find.WindowStack.Add(new PolicyNamePromptWindow(suggestedName, (name, overwrite) => SaveTemplatePolicy(selectedTemplate, name, overwrite)));
+                    var existingName = GetSingletonActivePolicyName(selectedTemplate);
+                    if (existingName != null)
+                    {
+                        _validationErrors = new[] { $"This is a singleton template and is already active as policy '{existingName}'. Only one policy can be active per singleton template." };
+                    }
+                    else
+                    {
+                        var suggestedName = selectedTemplate.GetTitle();
+                        Find.WindowStack.Add(new PolicyNamePromptWindow(suggestedName, (name, overwrite) => SaveTemplatePolicy(selectedTemplate, name, overwrite)));
+                    }
                 }
             }
-            Widgets.Label(saveRect.ContractedBy(4f), "Save");
+            Text.Anchor = TextAnchor.MiddleCenter;
+            Widgets.Label(saveRect, "Save");
+            Text.Anchor = TextAnchor.UpperLeft;
         }
 
         private string SaveTemplatePolicy(IDynamicPolicyTemplate template, string policyName, bool overwrite)
@@ -142,6 +242,16 @@ namespace HomebrewDot.Net.Rimworld.UI.Settings.Tabs
             {
                 _validationErrors = new[] { "Policy name is required." };
                 return _validationErrors[0];
+            }
+
+            if (template.Singleton)
+            {
+                var existingName = GetSingletonActivePolicyName(template);
+                if (existingName != null && !existingName.Equals(policyName, StringComparison.OrdinalIgnoreCase))
+                {
+                    _validationErrors = new[] { $"This singleton template is already active as policy '{existingName}'. Delete it first before creating a new one." };
+                    return _validationErrors[0];
+                }
             }
 
             var existingPolicy = DynamicFiltersToolkit.Policies.ActivePolicies.Any(x => x.Equals(policyName, StringComparison.OrdinalIgnoreCase));
@@ -170,7 +280,15 @@ namespace HomebrewDot.Net.Rimworld.UI.Settings.Tabs
             }
 
             var activeTemplates = DynamicFiltersToolkit.Settings.ActiveTemplates ?? (DynamicFiltersToolkit.Settings.ActiveTemplates = new List<ActivatedTemplates>());
-            activeTemplates.RemoveAll(x => x.PolicyName.Equals(policyName, StringComparison.OrdinalIgnoreCase));
+            if (template.Singleton)
+            {
+                // For singleton templates, remove any existing entry by the same StorageKey
+                activeTemplates.RemoveAll(x => x.StorageKey == template.StorageKey);
+            }
+            else
+            {
+                activeTemplates.RemoveAll(x => x.PolicyName.Equals(policyName, StringComparison.OrdinalIgnoreCase));
+            }
             activeTemplates.Add(new ActivatedTemplates
             {
                 StorageKey = template.StorageKey,
@@ -180,7 +298,8 @@ namespace HomebrewDot.Net.Rimworld.UI.Settings.Tabs
 
             DynamicFiltersToolkit.Instance.WriteSettings();
 
-            _lockedTemplateStorageKey = null;
+            _editingStorageKey = null;
+            _selectedStorageKey = null;
             _workingSettings = null;
             _validationErrors = Array.Empty<string>();
         }

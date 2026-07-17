@@ -47,6 +47,9 @@ namespace HomebrewDot.Net.Rimworld.Policies
         /// <inheritdoc/>
         public string StorageKey => $"{DynamicFiltersToolkit.ModId}.{typeof(SimpleFilterPolicy).Name}";
         /// <inheritdoc/>
+        public bool Singleton => false;
+
+        /// <inheritdoc/>
         public IEnumerable<string> ValidateSettings(IExposable settings)
         {
             if(settings is not SimpleFilterPolicySettings typedSettings)
@@ -216,7 +219,9 @@ namespace HomebrewDot.Net.Rimworld.Policies
             {
                 onClick?.Invoke();
             }
-            Widgets.Label(rect.ContractedBy(4f), label);
+            Text.Anchor = TextAnchor.MiddleCenter;
+            Widgets.Label(rect, label);
+            Text.Anchor = TextAnchor.UpperLeft;
         }
         /// <inheritdoc/>
         public string GetShortDescription() => "Filter for matching thing(defs) based on specified conditions on their properties.";
@@ -235,7 +240,7 @@ namespace HomebrewDot.Net.Rimworld.Policies
             }
             else
             {
-                var summary = ConditionDef.GroupToString(typedSettings.Conditions.Select(c => c.Condition).ToArray(), stringBuilder, true);
+                _ = ConditionDef.GroupToString(typedSettings.Conditions.Select(c => c.Condition).ToArray(), stringBuilder, true);
 
             }
             return stringBuilder.ToString();

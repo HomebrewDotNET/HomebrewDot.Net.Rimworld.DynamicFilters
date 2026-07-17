@@ -36,6 +36,10 @@ namespace HomebrewDot.Net.Rimworld.Configuration
         /// <param name="settings">The settings object created by <see cref="DrawSettings"/>. This can be used to provide a more detailed description based on the user's input. For example, if the template is for ranged weapons and the user has provided a range value of 10, the long description could be 'Creates a filter that includes all ranged weapons with a range above 10'</param>
         /// <returns>The long description of the template.</returns>
         string GetLongDescription(IExposable settings);
+        /// <summary>
+        /// If this template can only be activated once, this should return true. If this template can be activated multiple times, this should return false. 
+        /// </summary>
+        bool Singleton { get; }
 
         /// <summary>
         /// Draws the settings for this template in the given rect. This is called by the UI when the template is selected, and it should draw any necessary input fields for the user to configure the policies created by this template. The settings object returned by this method will be passed to the <see cref="IDynamicPolicyProvider"/> when it is activated, allowing it to create policies based on the user's input.

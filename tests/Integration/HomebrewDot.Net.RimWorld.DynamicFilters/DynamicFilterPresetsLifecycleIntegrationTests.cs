@@ -67,8 +67,7 @@ namespace HomebrewDot.Net.RimWorld.DynamicFilters.Tests
                         Conditions = DynamicFilterPresets.CreatePropertyCondition("Number", EqualsOperatorType.DefaultTypeName, 1).ToList()
                     };
                     var template = SimpleFilterPolicy.Instance;
-                    var provider = template.Create(settings);
-                    activator(policyName, provider);
+                    activator(policyName, "Test preset", template, settings);
                     callCount++;
                 });
 
@@ -96,10 +95,16 @@ namespace HomebrewDot.Net.RimWorld.DynamicFilters.Tests
             var conditions = DynamicFilterPresets.CreatePropertyCondition("Number", EqualsOperatorType.DefaultTypeName, 1);
             try
             {
-                DynamicFilterPresets.ActivateSimple(policyName, conditions);
+                var settings = new SimpleFilterPolicySettings
+                {
+                    Conditions = conditions.ToList(),
+                    ThingDef = true,
+                    DisallowMatching = false
+                };
+                DynamicFiltersToolkit.Policies.TryActivateProvider(policyName, SimpleFilterPolicy.Instance.Create(settings));
 
                 // Act
-                DynamicFilterPresets.DeactivatePresets();
+                DynamicFiltersToolkit.Policies.DeactivateProvider(policyName);
 
                 // Assert - all policies should be deactivated
                 Assert.DoesNotContain(policyName, DynamicFiltersToolkit.Policies.ActivePolicies);
@@ -107,7 +112,7 @@ namespace HomebrewDot.Net.RimWorld.DynamicFilters.Tests
             catch
             {
                 // best-effort cleanup
-                InvokeSafe(() => DynamicFilterPresets.DeactivatePresets());
+                InvokeSafe(() => { try { DynamicFiltersToolkit.Policies.DeactivateProvider(policyName); } catch { } });
             }
         }
 
@@ -117,15 +122,21 @@ namespace HomebrewDot.Net.RimWorld.DynamicFilters.Tests
             // Arrange
             var policyName = $"Simple_Activate_{Guid.NewGuid()}";
             var conditions = DynamicFilterPresets.CreatePropertyCondition("Number", EqualsOperatorType.DefaultTypeName, 1);
+            var settings = new SimpleFilterPolicySettings
+            {
+                Conditions = conditions.ToList(),
+                ThingDef = true,
+                DisallowMatching = false
+            };
 
             // Act
-            DynamicFilterPresets.ActivateSimple(policyName, conditions);
+            DynamicFiltersToolkit.Policies.TryActivateProvider(policyName, SimpleFilterPolicy.Instance.Create(settings));
 
             // Assert
             Assert.Contains(policyName, DynamicFiltersToolkit.Policies.ActivePolicies);
 
             // Cleanup
-            try { DynamicFilterPresets.DeactivatePresets(); } catch { }
+            try { DynamicFiltersToolkit.Policies.DeactivateProvider(policyName); } catch { }
         }
 
         [Fact]
@@ -134,15 +145,21 @@ namespace HomebrewDot.Net.RimWorld.DynamicFilters.Tests
             // Arrange
             var policyName = $"Simple_Multi_{Guid.NewGuid()}";
             var conditions = DynamicFilterPresets.CreatePropertyCondition("Number", EqualsOperatorType.DefaultTypeName, 5);
+            var settings = new SimpleFilterPolicySettings
+            {
+                Conditions = conditions.ToList(),
+                ThingDef = true,
+                DisallowMatching = false
+            };
 
             // Act
-            DynamicFilterPresets.ActivateSimple(policyName, conditions);
+            DynamicFiltersToolkit.Policies.TryActivateProvider(policyName, SimpleFilterPolicy.Instance.Create(settings));
 
             // Assert
             Assert.Contains(policyName, DynamicFiltersToolkit.Policies.ActivePolicies);
 
             // Cleanup
-            try { DynamicFilterPresets.DeactivatePresets(); } catch { }
+            try { DynamicFiltersToolkit.Policies.DeactivateProvider(policyName); } catch { }
         }
 
         private static void InvokeSafe(Action action) { try { action(); } catch { } }

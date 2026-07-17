@@ -122,19 +122,18 @@ namespace HomebrewDot.Net.Rimworld
                 }
                 SetPresets(e.Settings.EnablePresets);
             }, priority: byte.MaxValue);
-
-            if (Settings.EnableStorageFiltering)
-            {
-                EnableStorageFiltering();
-            }
-            else
-            {
-                DisableStorageFiltering();
-            }
-
-            Toolkit.Hooks.Manager.RegisterHook<OnSaveLoadedTrigger>(Instance, e =>
+         
+            Toolkit.Hooks.Manager.RegisterHook<OnGameLoadedTrigger>(Instance, e =>
             {
                 SetPresets(Settings.EnablePresets);
+                if (Settings.EnableStorageFiltering)
+                {
+                    EnableStorageFiltering();
+                }
+                else
+                {
+                    DisableStorageFiltering();
+                }
                 if (Settings.ActiveTemplates.Count == 0)
                 {
                     return;
@@ -181,7 +180,7 @@ namespace HomebrewDot.Net.Rimworld
                 }
                 else
                 {
-                    DynamicFilterPresets.DeactivatePresets();
+                    Logging.Log("Presets will remain active until the game is restarted.");
                 }
             }
 
@@ -351,6 +350,7 @@ namespace HomebrewDot.Net.Rimworld
             {
                 lock (_lock)
                 {
+                    var seenSingletonKeys = new HashSet<string>();
                     foreach (var template in templates)
                     {
                         var storageKey = template.StorageKey;
@@ -361,6 +361,14 @@ namespace HomebrewDot.Net.Rimworld
                             template.LoadFailed = true;
                             continue;
                         }
+
+                        if (provider.Singleton && !seenSingletonKeys.Add(storageKey))
+                        {
+                            LogWarning($"Skipping duplicate activation of singleton template '{storageKey}' for policy '{template.PolicyName}'. A policy from this template is already being loaded.");
+                            template.LoadFailed = true;
+                            continue;
+                        }
+
                         template.LoadFailed = true;
                         Invoking.Safe(() =>
                         {

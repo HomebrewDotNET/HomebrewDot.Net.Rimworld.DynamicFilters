@@ -61,7 +61,9 @@ namespace HomebrewDot.Net.Rimworld.UI.Settings
                     _selectedTabIndex = i;
                 }
 
-                Widgets.Label(tabRect.ContractedBy(4f), _allTabs[i].Title);
+                Text.Anchor = TextAnchor.MiddleCenter;
+                Widgets.Label(tabRect, _allTabs[i].Title);
+                Text.Anchor = TextAnchor.UpperLeft;
             }
         }
     }

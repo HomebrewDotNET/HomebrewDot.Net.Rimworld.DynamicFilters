@@ -8,6 +8,8 @@ using System.Threading.Tasks;
 using HomebrewDot.Net.Rimworld.Comparing;
 using HomebrewDot.Net.Rimworld.Comparing.Components;
 using HomebrewDot.Net.Rimworld.Comparing.Models;
+using HomebrewDot.Net.Rimworld.Configuration;
+using HomebrewDot.Net.Rimworld.Configuration.Components;
 using HomebrewDot.Net.Rimworld.Filtering;
 using HomebrewDot.Net.Rimworld.Policies;
 using HomebrewDot.Net.Rimworld.Referencing.Components;
@@ -22,81 +24,76 @@ namespace HomebrewDot.Net.Rimworld
     /// </summary>
     public static class DynamicFilterPresets
     {
-        /// <summary>
-        /// All the preset policy names provided by the toolkit.
-        /// </summary>
-        private static readonly HashSet<string> AllPolicyNames = new HashSet<string>();
-        private static Action<Action<string, IDynamicPolicyProvider>> Presets = (activator) => { };
+        private static Action<Action<string, string, IDynamicPolicyTemplate, IExposable>> Presets = (activator) => { };
 
         /// <summary>
         /// Policy name for the preset that contains all meat items.
         /// </summary>
-        public const string MeatPreset = "Meat Preset";
+        public const string MeatPreset = "Meats";
         /// <summary>
         /// Policy name for the preset that contains all metal items.
         /// </summary>
-        public const string MetalPreset = "Metal Preset";
+        public const string MetalPreset = "Metallic";
         /// <summary>
         /// Policy name for the preset that contains all ingestible items.
         /// </summary>
-        public const string IngestiblePreset = "Ingestible Preset";
+        public const string IngestiblePreset = "Ingestible";
         /// <summary>
         /// Policy name for the preset that contains all food items.
         /// </summary>
-        public const string FoodPreset = "Food Preset";
+        public const string FoodPreset = "Food";
         /// <summary>
         /// Policy name for the preset that contains all meal items.
         /// </summary>
-        public const string MealPreset = "Meal Preset";
+        public const string MealPreset = "Meals";
         /// <summary>
         /// Policy name for the preset that contains all good meal items.
         /// </summary>
-        public const string GoodMealPreset = "Good Meal Preset";
+        public const string GoodMealPreset = "Good Meals";
         /// <summary>
         /// Policy name for the preset that contains all snack items. (Gives recreation or joy)
         /// </summary>
-        public const string SnackPreset = "Snack Preset";
+        public const string SnackPreset = "Snacks";
         /// <summary>
         /// Policy name for the preset that contains all medicinal items.
         /// </summary>
-        public const string IsMedicinalPreset = "Medicinal Preset";
+        public const string IsMedicinalPreset = "Medicinal";
         /// <summary>
         /// Policy name for the preset that contains all apparel items.
         /// </summary>
-        public const string IsApparelPreset = "Apparel Preset";
+        public const string IsApparelPreset = "Apparel";
         /// <summary>
         /// Policy name for the preset that contains all weapon items.
         /// </summary>
-        public const string IsWeaponPreset = "Weapon Preset";
+        public const string IsWeaponPreset = "Weapons";
         /// <summary>
         /// Policy name for the preset that contains all melee weapon items.
         /// </summary>
-        public const string IsMeleeWeaponPreset = "Melee Weapon Preset";
+        public const string IsMeleeWeaponPreset = "Melee Weapons";
         /// <summary>
         /// Policy name for the preset that contains all ranged weapon items.
         /// </summary>
-        public const string IsRangedWeaponPreset = "Ranged Weapon Preset";
+        public const string IsRangedWeaponPreset = "Ranged Weapons";
         /// <summary>
         /// Policy name for the preset that contains all flammable items.
         /// </summary>
-        public const string FlammablePreset = "Flammable Preset";
+        public const string FlammablePreset = "Flammable";
         /// <summary>
         /// Policy name for the preset that contains all materials for everything that is currently buildable ny the player.
         /// </summary>
-        public const string ConstructionPreset = "Construction Preset";
+        public const string ConstructionPreset = "Construction Materials";
         /// <summary>
         /// Policy name for the preset that contains all things that can explode on death or when taking damage/being lit on fire.
         /// </summary>
-        public const string ExplosivePreset = "Explosive Preset";
-
+        public const string ExplosivesPreset = "Explosives";
         /// <summary>
         /// Adds a preset provider to the toolkit. The provided action will be called with an activator that can be used to activate policies.
         /// Mainly used by patches.
         /// </summary>
         /// <param name="action">Delegate that will be called with another delegate for activating the preset</param>
-        public static void AddPresetProvider(Action<Action<string, IDynamicPolicyProvider>> action)
+        public static void AddPresetProvider(Action<Action<string, string, IDynamicPolicyTemplate, IExposable>> action)
         {
-            lock(AllPolicyNames)
+            lock(Presets)
             {
                 Presets += action;
             }
@@ -108,11 +105,11 @@ namespace HomebrewDot.Net.Rimworld
         {
             Logging.Log("Activating all presets...");
 
-            ActivateSimple(MeatPreset, CreatePropertyCondition(Toolkit.Helpers.Expression.GetMember<ThingDef, bool>(x => x.IsMeat).Name, EqualsOperatorType.DefaultTypeName, true), true, false);
-            ActivateSimple(MetalPreset, CreatePropertyCondition(Toolkit.Helpers.Expression.GetMember<ThingDef, bool>(x => x.IsMetal).Name, EqualsOperatorType.DefaultTypeName, true), true, false);
-            ActivateSimple(IngestiblePreset, CreatePropertyCondition(Toolkit.Helpers.Expression.GetMember<ThingDef, bool>(x => x.IsIngestible).Name, EqualsOperatorType.DefaultTypeName, true), true, false);
-            ActivateSimple(FoodPreset, CreatePropertyCondition(Toolkit.Helpers.Expression.GetMember<ThingDef, bool>(x => x.IsNutritionGivingIngestible).Name, EqualsOperatorType.DefaultTypeName, true), true, false);
-            ActivateSimple(MealPreset, CreatePropertyCondition($"{Toolkit.Helpers.Expression.GetMember<ThingDef, IngestibleProperties>(x => x.ingestible).Name}.{Toolkit.Helpers.Expression.GetMember<ThingDef, FoodPreferability>(x => x.ingestible.preferability).Name}",
+            CreateSimple(MeatPreset, "Filters all meat defs", CreatePropertyCondition(Toolkit.Helpers.Expression.GetMember<ThingDef, bool>(x => x.IsMeat).Name, EqualsOperatorType.DefaultTypeName, true), true, false);
+            CreateSimple(MetalPreset, "Filters all metallic defs", CreatePropertyCondition(Toolkit.Helpers.Expression.GetMember<ThingDef, bool>(x => x.IsMetal).Name, EqualsOperatorType.DefaultTypeName, true), true, false);
+            CreateSimple(IngestiblePreset, "Filters all defs that can be ingested", CreatePropertyCondition(Toolkit.Helpers.Expression.GetMember<ThingDef, bool>(x => x.IsIngestible).Name, EqualsOperatorType.DefaultTypeName, true), true, false);
+            CreateSimple(FoodPreset, "Filters all defs that can be ingested and provides nutrition", CreatePropertyCondition(Toolkit.Helpers.Expression.GetMember<ThingDef, bool>(x => x.IsNutritionGivingIngestible).Name, EqualsOperatorType.DefaultTypeName, true), true, false);
+            CreateSimple(MealPreset, "Filters all meal defs", CreatePropertyCondition($"{Toolkit.Helpers.Expression.GetMember<ThingDef, IngestibleProperties>(x => x.ingestible).Name}.{Toolkit.Helpers.Expression.GetMember<ThingDef, FoodPreferability>(x => x.ingestible.preferability).Name}",
                                                                  InOperatorType.DefaultTypeName, new FoodPreferability[]
                                                                  {
                                                                     FoodPreferability.MealTerrible,
@@ -121,46 +118,23 @@ namespace HomebrewDot.Net.Rimworld
                                                                     FoodPreferability.MealFine,
                                                                     FoodPreferability.MealLavish,
                                                                  }), true, false);
-            ActivateSimple(GoodMealPreset, CreatePropertyCondition($"{Toolkit.Helpers.Expression.GetMember<ThingDef, IngestibleProperties>(x => x.ingestible).Name}.{Toolkit.Helpers.Expression.GetMember<ThingDef, FoodPreferability>(x => x.ingestible.preferability).Name}",
+            CreateSimple(GoodMealPreset, "Filters all meal defs that don't taste awful", CreatePropertyCondition($"{Toolkit.Helpers.Expression.GetMember<ThingDef, IngestibleProperties>(x => x.ingestible).Name}.{Toolkit.Helpers.Expression.GetMember<ThingDef, FoodPreferability>(x => x.ingestible.preferability).Name}",
                                                                  InOperatorType.DefaultTypeName, new FoodPreferability[]
                                                                  {
                                                                     FoodPreferability.MealSimple,
                                                                     FoodPreferability.MealFine,
                                                                     FoodPreferability.MealLavish,
                                                                  }), true, false);
-            ActivateSimple(SnackPreset, CreateSnackConditions(), true, false);
-            ActivateSimple(IsMedicinalPreset, CreatePropertyCondition(Toolkit.Helpers.Expression.GetMember<ThingDef, bool>(x => x.IsMedicine).Name, EqualsOperatorType.DefaultTypeName, true), true, false);
-            ActivateSimple(IsApparelPreset, CreatePropertyCondition(Toolkit.Helpers.Expression.GetMember<ThingDef, bool>(x => x.IsApparel).Name, EqualsOperatorType.DefaultTypeName, true), true, false);
-            ActivateSimple(IsWeaponPreset, CreatePropertyCondition(Toolkit.Helpers.Expression.GetMember<ThingDef, bool>(x => x.IsWeapon).Name, EqualsOperatorType.DefaultTypeName, true), true, false);
-            ActivateSimple(IsMeleeWeaponPreset, CreatePropertyCondition(Toolkit.Helpers.Expression.GetMember<ThingDef, bool>(x => x.IsMeleeWeapon).Name, EqualsOperatorType.DefaultTypeName, true), true, false);
-            ActivateSimple(IsRangedWeaponPreset, CreatePropertyCondition(Toolkit.Helpers.Expression.GetMember<ThingDef, bool>(x => x.IsRangedWeapon).Name, EqualsOperatorType.DefaultTypeName, true), true, false);
+            CreateSimple(SnackPreset, "Filters all defs that are tasty raw or give joy when ingested", CreateSnackConditions(), true, false);
+            CreateSimple(IsMedicinalPreset, "Filters all defs that are medicinal", CreatePropertyCondition(Toolkit.Helpers.Expression.GetMember<ThingDef, bool>(x => x.IsMedicine).Name, EqualsOperatorType.DefaultTypeName, true), true, false);
+            CreateSimple(IsApparelPreset, "Filters all defs that are apparel", CreatePropertyCondition(Toolkit.Helpers.Expression.GetMember<ThingDef, bool>(x => x.IsApparel).Name, EqualsOperatorType.DefaultTypeName, true), true, false);
+            CreateSimple(IsWeaponPreset, "Filters all defs that are weapons", CreatePropertyCondition(Toolkit.Helpers.Expression.GetMember<ThingDef, bool>(x => x.IsWeapon).Name, EqualsOperatorType.DefaultTypeName, true), true, false);
+            CreateSimple(IsMeleeWeaponPreset, "Filters all defs that are melee weapons", CreatePropertyCondition(Toolkit.Helpers.Expression.GetMember<ThingDef, bool>(x => x.IsMeleeWeapon).Name, EqualsOperatorType.DefaultTypeName, true), true, false);
+            CreateSimple(IsRangedWeaponPreset, "Filters all defs that are ranged weapons", CreatePropertyCondition(Toolkit.Helpers.Expression.GetMember<ThingDef, bool>(x => x.IsRangedWeapon).Name, EqualsOperatorType.DefaultTypeName, true), true, false);
             Toolkit.Indexing.Def.Thing.TrackIsConstructionMaterial();
-            ActivateSimple(ConstructionPreset, CreatePropertyCondition(ToolkitConstants.Def.Thing.IsConstructionMaterial.Name, EqualsOperatorType.DefaultTypeName, true), true, false);
-            ActivateSimple(ExplosivePreset, CreateExplosiveCondition(), true, false);
-            ActivateSimple(FlammablePreset, CreateStatCondition(StatDefOf.Flammability, GreaterOperatorType.DefaultTypeName, 0), true, false);
-
-            lock(AllPolicyNames)
-            {
-                Presets((policyName, provider) =>
-                {
-                    ActivatePolicy(policyName, provider);
-                });
-            }
-        }
-        /// <summary>
-        /// Disables all presets.
-        /// </summary>
-        public static void DeactivatePresets()
-        {
-            Logging.Log("Deactivating all presets...");
-            lock (AllPolicyNames)
-            {
-                foreach (var policyName in AllPolicyNames.ToArray())
-                {
-                    DynamicFiltersToolkit.Policies.DeactivateProvider(policyName);
-                    AllPolicyNames.Remove(policyName);
-                }
-            }
+            CreateSimple(ConstructionPreset, "Filters all defs that are currently usable to build stuff. Updated when research is completed", CreatePropertyCondition(ToolkitConstants.Def.Thing.IsConstructionMaterial.Name, EqualsOperatorType.DefaultTypeName, true), true, false);
+            CreateSimple(ExplosivesPreset, "Filters all defs that could explode when hit", CreateExplosiveCondition(), true, false);
+            CreateSimple(FlammablePreset, "Filters all defs that are flammable", CreateStatCondition(StatDefOf.Flammability, GreaterOperatorType.DefaultTypeName, 0), true, false);
         }
 
         /// <summary>
@@ -320,7 +294,7 @@ namespace HomebrewDot.Net.Rimworld
         /// <param name="conditions">The conditions to apply to the policy.</param>
         /// <param name="thingDef">Whether the policy applies to ThingDefs.</param>
         /// <param name="disallowMatching">Whether to disallow matching items.</param>
-        public static void ActivateSimple(string policyName, SimpleFilterPolicyCondition[] conditions, bool thingDef = true, bool disallowMatching = false)
+        public static void CreateSimple(string presetName, string description, SimpleFilterPolicyCondition[] conditions, bool thingDef = true, bool disallowMatching = false)
         {
             var settings = new SimpleFilterPolicySettings()
             {
@@ -329,8 +303,7 @@ namespace HomebrewDot.Net.Rimworld
                 DisallowMatching = disallowMatching
             };
             var template = SimpleFilterPolicy.Instance;
-            var provider = template.Create(settings);
-            ActivatePolicy(policyName, provider);
+            CreatePreset<SimpleFilterPolicy>(presetName, description, template, settings);
         }
 
         /// <summary>
@@ -338,13 +311,10 @@ namespace HomebrewDot.Net.Rimworld
         /// </summary>
         /// <param name="policyName">The name of the policy to activate.</param>
         /// <param name="provider">The provider to use for the policy.</param>
-        public static void ActivatePolicy(string policyName, IDynamicPolicyProvider provider)
+        public static void CreatePreset<T>(string presetName, string description, T policy, IExposable settings) where T : IDynamicPolicyTemplate
         {
-            DynamicFiltersToolkit.Policies.TryActivateProvider(policyName, provider, false, true);
-            lock (AllPolicyNames)
-            {
-                AllPolicyNames.Add(policyName);
-            }
+            var preset = new DelegatedPolicyPreset<T>(presetName, description, policy, settings);
+            DynamicFiltersToolkit.Templates.AddTemplate(preset);
         }
     }
 }

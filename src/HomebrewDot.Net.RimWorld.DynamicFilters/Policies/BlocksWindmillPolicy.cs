@@ -14,7 +14,7 @@ namespace HomebrewDot.Net.Rimworld.Policies
     /// <summary>
     /// Policy that filters all defs that can block a windmill.
     /// </summary>
-    public class BlocksWindmillPolicy : PolicyPreset, IDynamicPolicyProvider
+    public class BlocksWindmillPolicy : Preset, IDynamicPolicyProvider
     {
         // Statics
         /// <summary>
@@ -48,7 +48,9 @@ namespace HomebrewDot.Net.Rimworld.Policies
         {
             return this;
         }
-
+        /// <inheritdoc/>
+        public override string GetLongDescription()
+            => GetShortDescription();
         /// <inheritdoc/>
         public override string GetShortDescription()
         {
