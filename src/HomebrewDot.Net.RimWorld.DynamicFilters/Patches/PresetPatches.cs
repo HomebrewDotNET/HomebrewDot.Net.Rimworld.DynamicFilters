@@ -47,8 +47,8 @@ namespace HomebrewDot.Net.Rimworld.Patches
                 {
                     DynamicFilterPresets.AddPresetProvider(activator =>
                     {
-                        DynamicFilterPresets.CreateSimple(QueenBeePreset, $"Filters all defs that are queen bees from {ToolkitConstants.Mods.Alpha.Bees.PackageId}", DynamicFilterPresets.CreatePropertyCondition(Toolkit.Helpers.Expression.GetMember<ThingDef, string>(x => x.label).Name, MatchOperatorType.DefaultTypeName, BeeQueenRegex), false, false);
-                        DynamicFilterPresets.CreateSimple(DroneBeePreset, $"Filters all defs that are drone bees from {ToolkitConstants.Mods.Alpha.Bees.PackageId}", DynamicFilterPresets.CreatePropertyCondition(Toolkit.Helpers.Expression.GetMember<ThingDef, string>(x => x.label).Name, MatchOperatorType.DefaultTypeName, BeeDroneRegex), false, false);
+                        DynamicFilterPresets.CreateSimple(QueenBeePreset, $"Filters all defs that are queen bees from {ToolkitConstants.Mods.Alpha.Bees.PackageId}", DynamicFilterPresets.CreatePropertyCondition(Toolkit.Helpers.Expression.GetMember<ThingDef, string>(x => x.label).Name, MatchOperatorType.DefaultTypeName, BeeQueenRegex), true, false);
+                        DynamicFilterPresets.CreateSimple(DroneBeePreset, $"Filters all defs that are drone bees from {ToolkitConstants.Mods.Alpha.Bees.PackageId}", DynamicFilterPresets.CreatePropertyCondition(Toolkit.Helpers.Expression.GetMember<ThingDef, string>(x => x.label).Name, MatchOperatorType.DefaultTypeName, BeeDroneRegex), true, false);
                     });
                 }
             }, true, priority: byte.MinValue);

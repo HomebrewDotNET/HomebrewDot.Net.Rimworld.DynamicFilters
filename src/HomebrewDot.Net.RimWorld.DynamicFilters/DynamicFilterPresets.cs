@@ -135,6 +135,11 @@ namespace HomebrewDot.Net.Rimworld
             CreateSimple(ConstructionPreset, "Filters all defs that are currently usable to build stuff. Updated when research is completed", CreatePropertyCondition(ToolkitConstants.Def.Thing.IsConstructionMaterial.Name, EqualsOperatorType.DefaultTypeName, true), true, false);
             CreateSimple(ExplosivesPreset, "Filters all defs that could explode when hit", CreateExplosiveCondition(), true, false);
             CreateSimple(FlammablePreset, "Filters all defs that are flammable", CreateStatCondition(StatDefOf.Flammability, GreaterOperatorType.DefaultTypeName, 0), true, false);
+
+            Presets((name, description, template, settings) =>
+            {
+                CreatePreset(name, description, template, settings);
+            });
         }
 
         /// <summary>
