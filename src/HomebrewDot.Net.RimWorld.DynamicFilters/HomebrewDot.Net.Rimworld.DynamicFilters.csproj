@@ -33,6 +33,12 @@
 	</PropertyGroup>
 
 	<ItemGroup>
+	  <Compile Remove="Policies\Template\**" />
+	  <EmbeddedResource Remove="Policies\Template\**" />
+	  <None Remove="Policies\Template\**" />
+	</ItemGroup>
+
+	<ItemGroup>
 		<Reference Include="Assembly-CSharp">
 			<HintPath>$(RimWorldManaged)\Assembly-CSharp.dll</HintPath>
 			<Private>false</Private>
@@ -65,7 +71,6 @@
 	</ItemGroup>
 
 	<ItemGroup>
-	  <Folder Include="Policies\Template\" />
 	  <Folder Include="UI\Components\" />
 	</ItemGroup>
 

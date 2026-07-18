@@ -47,8 +47,7 @@ namespace HomebrewDot.Net.RimWorld.DynamicFilters.Tests
             var settings = new SimpleFilterPolicySettings
             {
                 Conditions = conditions.ToList(),
-                ThingDef = true,
-                DisallowMatching = false
+                ThingDef = true
             };
             DynamicFiltersToolkit.Policies.TryActivateProvider(policyName, SimpleFilterPolicy.Instance.Create(settings));
             _activatedPolicies.Add(policyName);

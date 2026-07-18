@@ -63,7 +63,6 @@ namespace HomebrewDot.Net.RimWorld.DynamicFilters.Tests
                     var settings = new SimpleFilterPolicySettings
                     {
                         ThingDef = true,
-                        DisallowMatching = false,
                         Conditions = DynamicFilterPresets.CreatePropertyCondition("Number", EqualsOperatorType.DefaultTypeName, 1).ToList()
                     };
                     var template = SimpleFilterPolicy.Instance;
@@ -98,8 +97,7 @@ namespace HomebrewDot.Net.RimWorld.DynamicFilters.Tests
                 var settings = new SimpleFilterPolicySettings
                 {
                     Conditions = conditions.ToList(),
-                    ThingDef = true,
-                    DisallowMatching = false
+                    ThingDef = true
                 };
                 DynamicFiltersToolkit.Policies.TryActivateProvider(policyName, SimpleFilterPolicy.Instance.Create(settings));
 
@@ -125,8 +123,7 @@ namespace HomebrewDot.Net.RimWorld.DynamicFilters.Tests
             var settings = new SimpleFilterPolicySettings
             {
                 Conditions = conditions.ToList(),
-                ThingDef = true,
-                DisallowMatching = false
+                ThingDef = true
             };
 
             // Act
@@ -148,8 +145,7 @@ namespace HomebrewDot.Net.RimWorld.DynamicFilters.Tests
             var settings = new SimpleFilterPolicySettings
             {
                 Conditions = conditions.ToList(),
-                ThingDef = true,
-                DisallowMatching = false
+                ThingDef = true
             };
 
             // Act

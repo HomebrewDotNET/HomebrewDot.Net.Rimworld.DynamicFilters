@@ -10,6 +10,7 @@ using HomebrewDot.Net.Rimworld.Configuration;
 using HomebrewDot.Net.Rimworld.Extensions;
 using HomebrewDot.Net.Rimworld.Filtering;
 using HomebrewDot.Net.Rimworld.Indexing;
+using HomebrewDot.Net.Rimworld.Policies.Components;
 using HomebrewDot.Net.Rimworld.Referencing;
 using HomebrewDot.Net.Rimworld.Referencing.Components;
 using HomebrewDot.Net.Rimworld.Referencing.Models;
@@ -61,6 +62,7 @@ namespace HomebrewDot.Net.Rimworld.Policies
             if (typedSettings?.Conditions is null || !typedSettings.Conditions.Any())
             {
                 yield return "At least 1 condition should be defined";
+                yield break;
             }
             for(int i = 0; i < typedSettings.Conditions.Count; i++)
             {
@@ -116,9 +118,6 @@ namespace HomebrewDot.Net.Rimworld.Policies
             var thingDefRect = new Rect(rect.x, cursorY, rect.width, 24f);
             Widgets.CheckboxLabeled(thingDefRect, "ForThingDef", ref typedSettings.ThingDef);
             cursorY = thingDefRect.yMax + 6f;
-            var disallowRect = new Rect(rect.x, cursorY, rect.width, 24f);
-            Widgets.CheckboxLabeled(disallowRect, "Disallow Matching", ref typedSettings.DisallowMatching);
-            cursorY = disallowRect.yMax + 6f;
 
             var listLabelRect = new Rect(rect.x, cursorY, rect.width, 22f);
             Widgets.Label(listLabelRect, "Conditions");
@@ -283,7 +282,7 @@ namespace HomebrewDot.Net.Rimworld.Policies
                         var def = condition.Condition;
                         _ = x.CompareFrom(def);
                     }
-                    return _settings.ThingDef ? x.CollectFromSnapshot(d => d.GetTable<ThingDef>(Toolkit.Indexing.Def.Thing.FullTableName), d =>  d.GetTable<ThingDef>(Toolkit.Indexing.Def.Thing.FullTableName).Enumerate<IIndexed<ThingDef>>(), false) : x.CollectFromSnapshot(d => d.GetTable<Thing>(Toolkit.Indexing.Thing.TableName), d => d.GetTable<Thing>(Toolkit.Indexing.Thing.TableName).Enumerate<IIndexed<Thing>>());
+                    return _settings.ThingDef ? x.CollectFromSnapshot(d => d.GetTable<ThingDef>(Toolkit.Indexing.Def.Thing.FullTableName), d => d.GetTable<ThingDef>(Toolkit.Indexing.Def.Thing.FullTableName).Enumerate<IIndexed<ThingDef>>(), false) : x.CollectFromSnapshot(d => d.GetTable<Thing>(Toolkit.Indexing.Thing.TableName), d => d.GetTable<Thing>(Toolkit.Indexing.Thing.TableName).Enumerate<IIndexed<Thing>>());
                 });
 
                 context.WithLabel("Simple Filter")
@@ -291,137 +290,16 @@ namespace HomebrewDot.Net.Rimworld.Policies
 
                 if (_settings.ThingDef)
                 {
-                    context.AvailableFor<Map, ThingDef>(new Policy(name));
+                    context.AvailableFor<Map, ThingDef>(new CollectionPolicy(name));
                 }
                 else
                 {
-                    context.AvailableFor<Map, Thing>(new Policy(name));
+                    context.AvailableFor<Map, Thing>(new CollectionPolicy(name));
                 }
             }
             /// <inheritdoc/>
             public void Deactivate(Action disposePolicies)
             {
-            }
-        }
-
-        private class Policy : IDynamicPolicy<Map, ThingDef>, IDynamicPolicy<Map, Thing>, IDisposable
-        {
-            // Fields
-            private readonly string _name;
-
-            // State
-            internal int _filterTracker;
-
-            // Properties
-            /// <inheritdoc/>
-            string IDynamicPolicy<Map, Thing>.Name => _name;
-            /// <inheritdoc/>
-            string IDynamicPolicy<Map, ThingDef>.Name => _name;
-
-            public Policy(string name)
-            {
-                _name = Guard.NotNullOrWhitespace(name, nameof(name));
-            }
-            /// <inheritdoc/>
-            IDynamicFilter<Map, Thing> IDynamicPolicy<Map, Thing>.GetFilter(Map scope)
-            {
-                scope = Guard.NotNull(scope, nameof(scope));
-
-                var mapCollectionName = $"{scope.GetUniqueLoadID()}.{_name}";
-                Toolkit.Collecting.Build(mapCollectionName, x => x.Compare.Indexed(nameof(Map))
-                                                                  .With.Equal(scope)
-                                                                  .CollectFromCollection<ICollectionBuilder, Thing>(_name)
-                                        );
-                return new Filter<Thing>(mapCollectionName, scope, this);
-            }
-            /// <inheritdoc/>
-            IDynamicFilter<Map, ThingDef> IDynamicPolicy<Map, ThingDef>.GetFilter(Map scope)
-            {
-                scope = Guard.NotNull(scope, nameof(scope));
-
-                // Defs are not really scoped per map so no need for extra filtering
-                _filterTracker++;
-                return new Filter<ThingDef>(_name, scope, this);
-            }
-            /// <inheritdoc/>
-            public void Dispose()
-            {
-                if(_filterTracker <= 0)
-                    Toolkit.Collecting.Remove(_name);
-            }
-        }
-
-        private class Filter<T> : IDynamicFilter<Map, T>, IDisposable where T : class
-        {
-            // Fields
-            private readonly string _collectionName;
-            private readonly Policy _policy;
-
-            // State
-            private ICollector<T> _collection;
-            private int _lastCollectionVersion = -1;
-
-            // Properties
-            /// <inheritdoc/>
-            public Map Scope { get; }
-            /// <inheritdoc/>
-            public IDynamicPolicy<Map, T> Policy => (IDynamicPolicy<Map,T>)_policy;
-
-            public Filter(string collectionName, Map scope, Policy policy)
-            {
-                _collectionName = Guard.NotNullOrWhitespace(collectionName, nameof(collectionName));
-                Scope = Guard.NotNull(scope, nameof(scope));
-                _policy = Guard.NotNull(policy, nameof(policy));
-                if(Toolkit.Collecting.GetAllCollectors().TryGetValue(_collectionName, out var collector) && collector is ICollector<T> typedCollector)
-                {
-                    _collection = typedCollector;
-                }
-            }
-            /// <inheritdoc/>
-            public bool Update(IStateStore<Map> stateStore)
-            {
-                bool isNew = false;
-                if (Toolkit.Collecting.GetAllCollectors().TryGetValue(_collectionName, out var collector) && collector is ICollector<T> typedCollector)
-                {
-                    isNew = _collection != typedCollector;
-                    _collection = typedCollector;
-                }
-                if(_collection is SnapshotCollector<T> snapshotCollector)
-                {
-                    if (snapshotCollector.Version != _lastCollectionVersion)
-                    {
-                        _lastCollectionVersion = snapshotCollector.Version;
-                        return true;
-                    }
-                }
-                else
-                {
-                    // If it's not a snapshot collector we assume it's always updated since we don't have versioning for other collector types
-                    return true;
-                }
-                return isNew;
-            }
-            /// <inheritdoc/>
-            bool IDynamicFilter<Map, T>.Filter(T item)
-            {
-                var collection = _collection;
-                if(collection is not null)
-                {
-                    return collection.Contains(item);
-                }
-                return false;
-            }
-            /// <inheritdoc/>
-            public void Dispose()
-            {
-                if(typeof(ThingDef) == typeof(T))
-                {
-                    _policy._filterTracker--;
-                }
-                else
-                {
-                    Toolkit.Collecting.Remove(_collectionName);
-                }
             }
         }
     }
@@ -435,11 +313,6 @@ namespace HomebrewDot.Net.Rimworld.Policies
         /// When false it applies to <see cref="Verse.Thing"/>.
         /// </summary>
         public bool ThingDef = true;
-        /// <summary>
-        /// Inverts the policy to filter out matching defs/things instead of including them. 
-        /// When false it will include matching and exclude the rest, when true it will exclude matching and include the rest. Default is false (include matching).
-        /// </summary>
-        public bool DisallowMatching = false;
 
         /// <summary>
         /// The conditions for the filter policy. This is a list of <see cref="SimpleFilterPolicyCondition"/>s that define the conditions for the filter policy.
@@ -450,7 +323,6 @@ namespace HomebrewDot.Net.Rimworld.Policies
         public void ExposeData()
         {
             Scribe_Values.Look(ref ThingDef, "ThingDef");
-            Scribe_Values.Look(ref DisallowMatching, "DisallowMatching");
             Scribe_Collections.Look(ref Conditions, "Conditions", LookMode.Deep);
         }
     }
