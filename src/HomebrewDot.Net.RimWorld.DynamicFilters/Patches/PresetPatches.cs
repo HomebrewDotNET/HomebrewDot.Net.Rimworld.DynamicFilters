@@ -8,6 +8,10 @@ using Verse;
 using HomebrewDot.Net.Rimworld.Hooks;
 using HomebrewDot.Net.Rimworld.Comparing.Components;
 using System.Text.RegularExpressions;
+using HomebrewDot.Net.Rimworld.Comparing.Models;
+using HomebrewDot.Net.Rimworld.Referencing.Components;
+using HomebrewDot.Net.Rimworld.Policies;
+using HomebrewDot.Net.Rimworld.Comparing;
 
 namespace HomebrewDot.Net.Rimworld.Patches
 {
@@ -47,13 +51,30 @@ namespace HomebrewDot.Net.Rimworld.Patches
                 {
                     DynamicFilterPresets.AddPresetProvider(activator =>
                     {
-                        DynamicFilterPresets.CreateSimple(QueenBeePreset, $"Filters all defs that are queen bees from {ToolkitConstants.Mods.Alpha.Bees.PackageId}", DynamicFilterPresets.CreatePropertyCondition(Toolkit.Helpers.Expression.GetMember<ThingDef, string>(x => x.label).Name, MatchOperatorType.DefaultTypeName, BeeQueenRegex), true);
-                        DynamicFilterPresets.CreateSimple(DroneBeePreset, $"Filters all defs that are drone bees from {ToolkitConstants.Mods.Alpha.Bees.PackageId}", DynamicFilterPresets.CreatePropertyCondition(Toolkit.Helpers.Expression.GetMember<ThingDef, string>(x => x.label).Name, MatchOperatorType.DefaultTypeName, BeeDroneRegex), true);
+                        DynamicFilterPresets.CreateSimple(QueenBeePreset, $"Filters all defs that are queen bees from {ToolkitConstants.Mods.Alpha.Bees.PackageId}",
+                            ConditionBuilder.Build(builder =>
+                                builder.Compare.Indexed(nameof(ThingDef.defName))
+                                       .With.Match(BeeDefPrefixRegex)
+                                       .And
+                                       .Compare.Indexed(Toolkit.Helpers.Expression.GetMember<ThingDef, string>(x => x.label).Name)
+                                       .With.Match(BeeQueenRegex)
+                            ).Conditions.Select(x => SimpleFilterPolicyCondition.FromDef(x)).ToArray(),
+                            true);
+                        DynamicFilterPresets.CreateSimple(DroneBeePreset, $"Filters all defs that are drone bees from {ToolkitConstants.Mods.Alpha.Bees.PackageId}",
+                            ConditionBuilder.Build(builder =>
+                                builder.Compare.Indexed(nameof(ThingDef.defName))
+                                       .With.Match(BeeDefPrefixRegex)
+                                       .And
+                                       .Compare.Indexed(Toolkit.Helpers.Expression.GetMember<ThingDef, string>(x => x.label).Name)
+                                       .With.Match(BeeDroneRegex)
+                            ).Conditions.Select(x => SimpleFilterPolicyCondition.FromDef(x)).ToArray(),
+                            true);
                     });
                 }
             }, true, priority: byte.MinValue);
         }
 
+        private static readonly Regex BeeDefPrefixRegex = new Regex(@"(?i)^RB_", RegexOptions.Compiled);
         private static readonly Regex BeeQueenRegex = new Regex(@"(?i)Queen$", RegexOptions.Compiled);
         private static readonly Regex BeeDroneRegex = new Regex(@"(?i)Drone$", RegexOptions.Compiled);
     }

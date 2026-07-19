@@ -344,6 +344,80 @@ namespace HomebrewDot.Net.Rimworld
             }
 
             /// <summary>
+            /// Renames an activated provider from <paramref name="oldName"/> to <paramref name="newName"/>.
+            /// The provider is deactivated under the old name and re-activated under the new one.
+            /// Settings are preserved.
+            /// </summary>
+            /// <param name="oldName">The current name of the provider to rename.</param>
+            /// <param name="newName">The new name for the provider.</param>
+            /// <returns>True if the rename succeeded; otherwise, false.</returns>
+            public static bool RenameProvider(string oldName, string newName)
+            {
+                lock (_lock)
+                {
+                    if (!_activePolicies.TryGetValue(oldName, out var activated))
+                    {
+                        LogWarning($"Tried to rename provider '{oldName}', but no provider with that name is active.");
+                        return false;
+                    }
+
+                    if (activated.IsReadOnly)
+                    {
+                        LogWarning($"Tried to rename read-only provider '{oldName}'.");
+                        return false;
+                    }
+
+                    if (string.Equals(oldName, newName, StringComparison.OrdinalIgnoreCase))
+                    {
+                        return true; // No-op
+                    }
+
+                    if (_activePolicies.ContainsKey(newName))
+                    {
+                        LogWarning($"Tried to rename provider '{oldName}' to '{newName}', but a provider with the new name already exists.");
+                        return false;
+                    }
+
+                    // Get the template and settings to recreate the provider
+                    var activeTemplate = DynamicFiltersToolkit.Settings.ActiveTemplates?.FirstOrDefault(x => x.PolicyName == oldName);
+                    if (activeTemplate == null)
+                    {
+                        LogWarning($"Tried to rename provider '{oldName}', but no matching template entry was found in settings.");
+                        return false;
+                    }
+
+                    var template = Templates.All.FirstOrDefault(x => x.StorageKey == activeTemplate.StorageKey);
+                    if (template == null)
+                    {
+                        LogWarning($"Tried to rename provider '{oldName}', but its template '{activeTemplate.StorageKey}' is no longer available.");
+                        return false;
+                    }
+
+                    var settings = activeTemplate.Settings;
+
+                    // Deactivate old provider
+                    DeactivateProvider(oldName);
+
+                    // Update template entry with new name
+                    activeTemplate.PolicyName = newName;
+
+                    // Create fresh provider and activate under new name
+                    var newProvider = template.Create(settings);
+                    if (!TryActivateProvider(newName, newProvider, deactivateExisting: false))
+                    {
+                        // Rollback: restore old name
+                        activeTemplate.PolicyName = oldName;
+                        TryActivateProvider(oldName, template.Create(settings), deactivateExisting: false);
+                        return false;
+                    }
+
+                    DynamicFiltersToolkit.Instance.WriteSettings();
+                    if (IsVerboseEnabled) LogVerbose($"Renamed dynamic policy provider from '{oldName}' to '{newName}'.");
+                    return true;
+                }
+            }
+
+            /// <summary>
             /// Loads the activated templates from the settings and activates the corresponding providers. This should be called when the game is loaded to restore the activated policies from the previous session.
             /// </summary>
             /// <param name="templates">The list of activated templates to be loaded and activated.</param>

@@ -139,12 +139,17 @@ namespace HomebrewDot.Net.Rimworld.UI.Settings.Tabs
             _editorPanel.DrawReadOnly(rect, title, description, string.Empty);
 
             var buttonWidth = 120f;
+            var buttonGap = 8f;
             var buttonsHeight = 34f;
             var y = innerRect.yMax - buttonsHeight;
 
+            var buttonCount = _editingTemplate != null ? 3 : 1;
+            var totalButtonWidth = buttonCount * buttonWidth + (buttonCount - 1) * buttonGap;
+            var startX = innerRect.x;
+
             if (_editingTemplate != null)
             {
-                var editRect = new Rect(innerRect.x, y, buttonWidth, buttonsHeight);
+                var editRect = new Rect(startX, y, buttonWidth, buttonsHeight);
                 Widgets.DrawMenuSection(editRect);
                 if (Widgets.ButtonInvisible(editRect))
                 {
@@ -155,9 +160,21 @@ namespace HomebrewDot.Net.Rimworld.UI.Settings.Tabs
                 Text.Anchor = TextAnchor.MiddleCenter;
                 Widgets.Label(editRect, "Edit");
                 Text.Anchor = TextAnchor.UpperLeft;
+                startX = editRect.xMax + buttonGap;
+
+                var renameRect = new Rect(startX, y, buttonWidth, buttonsHeight);
+                Widgets.DrawMenuSection(renameRect);
+                if (Widgets.ButtonInvisible(renameRect))
+                {
+                    OpenRenamePrompt(selectedPolicy);
+                }
+                Text.Anchor = TextAnchor.MiddleCenter;
+                Widgets.Label(renameRect, "Rename");
+                Text.Anchor = TextAnchor.UpperLeft;
+                startX = renameRect.xMax + buttonGap;
             }
 
-            var deleteRect = new Rect(innerRect.x + (_editingTemplate != null ? buttonWidth + 8f : 0), y, buttonWidth, buttonsHeight);
+            var deleteRect = new Rect(startX, y, buttonWidth, buttonsHeight);
             Widgets.DrawMenuSection(deleteRect);
             if (Widgets.ButtonInvisible(deleteRect))
             {
@@ -350,6 +367,44 @@ namespace HomebrewDot.Net.Rimworld.UI.Settings.Tabs
             _editingTemplate = null;
             _workingSettings = null;
             _validationErrors = Array.Empty<string>();
+        }
+
+        private void OpenRenamePrompt(ActivatedPolicies selectedPolicy)
+        {
+            Find.WindowStack.Add(new PolicyNamePromptWindow(
+                selectedPolicy.Name,
+                (newName, overwrite) =>
+                {
+                    if (string.IsNullOrWhiteSpace(newName))
+                    {
+                        return "Policy name is required.";
+                    }
+
+                    if (string.Equals(newName, selectedPolicy.Name, StringComparison.OrdinalIgnoreCase))
+                    {
+                        return "New name must differ from the current name.";
+                    }
+
+                    var existingNames = DynamicFiltersToolkit.Policies.ActivePolicies;
+                    if (existingNames.Contains(newName))
+                    {
+                        return $"A policy named '{newName}' already exists. Choose a different name.";
+                    }
+
+                    if (!DynamicFiltersToolkit.Policies.RenameProvider(selectedPolicy.Name, newName))
+                    {
+                        return "Failed to rename policy. Check the log for details.";
+                    }
+
+                    // Update UI state
+                    _selectedPolicyName = newName;
+                    _editingPolicyName = null;
+                    _editingTemplate = null;
+                    _workingSettings = null;
+                    _validationErrors = Array.Empty<string>();
+
+                    return null;
+                }));
         }
     }
 }

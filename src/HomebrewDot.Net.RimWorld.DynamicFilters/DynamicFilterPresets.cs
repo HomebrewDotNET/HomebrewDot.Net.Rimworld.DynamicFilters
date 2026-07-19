@@ -91,6 +91,50 @@ namespace HomebrewDot.Net.Rimworld
         /// </summary>
         public const string ExplosivesPreset = "Explosives";
         /// <summary>
+        /// Policy name for the preset that contains all non-humanoid, non-mechanoid corpses suitable for butchering.
+        /// </summary>
+        public const string ButcheryCorpsePreset = "Butchery Corpses";
+        /// <summary>
+        /// Policy name for the preset that contains all humanoid corpses.
+        /// </summary>
+        public const string HumanoidCorpsePreset = "Humanoid Corpses";
+        /// <summary>
+        /// Policy name for the preset that contains all mechanoid corpses.
+        /// </summary>
+        public const string MechanoidCorpsePreset = "Mechanoid Corpses";
+        /// <summary>
+        /// Policy name for the preset that contains all foul meat.
+        /// </summary>
+        public const string FoulMeatPreset = "Foul Meat";
+        /// <summary>
+        /// Policy name for the preset that contains all foul leather.
+        /// </summary>
+        public const string FoulLeatherPreset = "Foul Leather";
+        /// <summary>
+        /// Policy name for the preset that contains all medical items.
+        /// </summary>
+        public const string IsMedicalPreset = "Medical Items";
+        /// <summary>
+        /// Policy name for the preset that contains all surgical parts (prosthetics, bionics, natural organs, etc.).
+        /// </summary>
+        public const string IsSurgicalPreset = "Surgical Parts";
+        /// <summary>
+        /// Policy name for the preset that contains all drinks.
+        /// </summary>
+        public const string DrinksPreset = "Drinks";
+        /// <summary>
+        /// Policy name for the preset that contains all non-alcoholic drinks.
+        /// </summary>
+        public const string NonAlcoholicDrinksPreset = "Non-Alcoholic Drinks";
+        /// <summary>
+        /// Policy name for the preset that contains all alcoholic drinks.
+        /// </summary>
+        public const string AlcoholicDrinksPreset = "Alcoholic Drinks";
+        /// <summary>
+        /// Policy name for the preset that contains coffee and tea.
+        /// </summary>
+        public const string CoffeeAndTeaPreset = "Coffee & Tea";
+        /// <summary>
         /// Adds a preset provider to the toolkit. The provided action will be called with an activator that can be used to activate policies.
         /// Mainly used by patches.
         /// </summary>
@@ -140,13 +184,119 @@ namespace HomebrewDot.Net.Rimworld
             CreateSimple(ConstructionPreset, "Filters all defs that are currently usable to build stuff. Updated when research is completed", CreatePropertyCondition(ToolkitConstants.Def.Thing.IsConstructionMaterial.Name, EqualsOperatorType.DefaultTypeName, true), true);
             CreateSimple(ExplosivesPreset, "Filters all defs that could explode when hit", CreateExplosiveCondition(), true);
             CreateSimple(FlammablePreset, "Filters all defs that are flammable", CreateStatCondition(StatDefOf.Flammability, GreaterOperatorType.DefaultTypeName, 0), true);
-
+            CreateSimple(ButcheryCorpsePreset, "Filters all non-humanoid, non-mechanoid corpses for butchering",
+                ConditionBuilder.Build(builder =>
+                    builder.Compare.Indexed(Toolkit.Helpers.Expression.GetMember<ThingDef, bool>(x => x.IsCorpse).Name)
+                           .With.True()
+                           .And
+                           .Compare.Indexed($"{nameof(ThingDef.race)}.{nameof(RaceProperties.Humanlike)}")
+                           .With.False()
+                           .And
+                           .Compare.Indexed($"{nameof(ThingDef.race)}.{nameof(RaceProperties.IsMechanoid)}")
+                           .With.False()
+                ).Conditions.Select(x => SimpleFilterPolicyCondition.FromDef(x)).ToArray(),
+                true);
+            CreateSimple(HumanoidCorpsePreset, "Filters all humanoid corpses",
+                ConditionBuilder.Build(builder =>
+                    builder.Compare.Indexed(Toolkit.Helpers.Expression.GetMember<ThingDef, bool>(x => x.IsCorpse).Name)
+                           .With.True()
+                           .And
+                           .Compare.Indexed($"{nameof(ThingDef.race)}.{nameof(RaceProperties.Humanlike)}")
+                           .With.True()
+                ).Conditions.Select(x => SimpleFilterPolicyCondition.FromDef(x)).ToArray(),
+                true);
+            CreateSimple(MechanoidCorpsePreset, "Filters all mechanoid corpses",
+                ConditionBuilder.Build(builder =>
+                    builder.Compare.Indexed(Toolkit.Helpers.Expression.GetMember<ThingDef, bool>(x => x.IsCorpse).Name)
+                           .With.True()
+                           .And
+                           .Compare.Indexed($"{nameof(ThingDef.race)}.{nameof(RaceProperties.IsMechanoid)}")
+                           .With.True()
+                ).Conditions.Select(x => SimpleFilterPolicyCondition.FromDef(x)).ToArray(),
+                true);
+            Toolkit.Indexing.Def.Thing.TrackIsFoul();
+            CreateSimple(FoulMeatPreset, "Filters all foul meat (human, insect, twisted, etc.)",
+                ConditionBuilder.Build(builder =>
+                    builder.Compare.Indexed(ToolkitConstants.Def.Thing.IsFoul.Name)
+                           .With.True()
+                           .And
+                           .Compare.Indexed(Toolkit.Helpers.Expression.GetMember<ThingDef, bool>(x => x.IsMeat).Name)
+                           .With.True()
+                ).Conditions.Select(x => SimpleFilterPolicyCondition.FromDef(x)).ToArray(),
+                true);
+            CreateSimple(FoulLeatherPreset, "Filters all foul leather (human, insect, etc.)",
+                ConditionBuilder.Build(builder =>
+                    builder.Compare.Indexed(ToolkitConstants.Def.Thing.IsFoul.Name)
+                           .With.True()
+                           .And
+                           .Compare.Indexed(Toolkit.Helpers.Expression.GetMember<ThingDef, bool>(x => x.IsLeather).Name)
+                           .With.True()
+                ).Conditions.Select(x => SimpleFilterPolicyCondition.FromDef(x)).ToArray(),
+                true);
+            Toolkit.Indexing.Def.Thing.TrackIsDrink();
+            Toolkit.Indexing.Def.Thing.TrackIsAlcoholic();
+            CreateSimple(DrinksPreset, "Filters all drinks (beer, tea, juices, soda, etc.)",
+                BuildConditions(builder =>
+                    builder.Compare.Indexed(ToolkitConstants.Def.Thing.IsDrink.Name)
+                           .With.True()
+                ),
+                true);
+            CreateSimple(AlcoholicDrinksPreset, "Filters all alcoholic drinks",
+                BuildConditions(builder =>
+                    builder.Compare.Indexed(ToolkitConstants.Def.Thing.IsAlcoholic.Name)
+                           .With.True()
+                ),
+                true);
+            CreateSimple(NonAlcoholicDrinksPreset, "Filters all non-alcoholic drinks",
+                ConditionBuilder.Build(builder =>
+                    builder.Compare.Indexed(ToolkitConstants.Def.Thing.IsDrink.Name)
+                           .With.True()
+                           .And
+                           .Compare.Indexed(ToolkitConstants.Def.Thing.IsAlcoholic.Name)
+                           .With.False()
+                ).Conditions.Select(x => SimpleFilterPolicyCondition.FromDef(x)).ToArray(),
+                true);
+            CreateSimple(CoffeeAndTeaPreset, "Filters coffee and tea drinks",
+                ConditionBuilder.Build(builder =>
+                    builder.Compare.Indexed(ToolkitConstants.Def.Thing.IsDrink.Name)
+                           .With.True()
+                           .And
+                           .Compare.Indexed(nameof(ThingDef.defName))
+                           .With.Match(new System.Text.RegularExpressions.Regex("(?i)(coffee|tea)", RegexOptions.Compiled))
+                ).Conditions.Select(x => SimpleFilterPolicyCondition.FromDef(x)).ToArray(),
+                true);
+            Toolkit.Indexing.Def.Thing.TrackIsMedical();
+            CreateSimple(IsMedicalPreset, "Filters all medical items (medicine, medical drugs, etc.)",
+                BuildConditions(builder =>
+                    builder.Compare.Indexed(ToolkitConstants.Def.Thing.IsMedical.Name)
+                           .With.True()
+                ),
+                true);
+            Toolkit.Indexing.Def.Thing.TrackIsSurgical();
+            CreateSimple(IsSurgicalPreset, "Filters all surgical parts (prosthetics, bionics, natural organs, etc.)",
+                BuildConditions(builder =>
+                    builder.Compare.Indexed(ToolkitConstants.Def.Thing.IsSurgical.Name)
+                           .With.True()
+                ),
+                true);
             Presets((name, description, template, settings) =>
             {
                 CreatePreset(name, description, template, settings);
             });
         }
 
+        /// <summary>
+        /// Builds conditions from a builder action, handling both single and multi-condition results correctly.
+        /// </summary>
+        private static SimpleFilterPolicyCondition[] BuildConditions(Action<IConditionBuilder> buildAction)
+        {
+            var def = ConditionBuilder.Build(buildAction);
+            if (def.Conditions != null && def.Conditions.Length > 0)
+            {
+                return def.Conditions.Select(x => SimpleFilterPolicyCondition.FromDef(x)).ToArray();
+            }
+            return new[] { SimpleFilterPolicyCondition.FromDef(def) };
+        }
         /// <summary>
         /// Creates a condition for a property of a ThingDef.
         /// </summary>
