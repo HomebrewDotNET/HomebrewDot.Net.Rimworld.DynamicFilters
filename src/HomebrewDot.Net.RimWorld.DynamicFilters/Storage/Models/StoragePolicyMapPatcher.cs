@@ -94,6 +94,11 @@ namespace HomebrewDot.Net.Rimworld.Storage.Models
                 {
                     thingResult = !thingResult;
                 }
+                if(!thingResult)
+                {
+                    __result = false;
+                    return false;
+                }
             }
             if (activeDefFilter != null)
             {

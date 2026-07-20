@@ -157,9 +157,9 @@ namespace HomebrewDot.Net.Rimworld
             Templates.AddTemplate(BlocksWindmillPolicy.Instance);
             Templates.AddTemplate(SimpleFilterPolicy.Instance);
             Templates.AddTemplate(ComplexFilterPolicy.Instance);
-            Toolkit.Indexing.Indexers.BuildIndexer<Thing>(ToolkitConstants.Thing.Map.Name, x => x.Include<string>(ToolkitConstants.Thing.Map, true));
-            Toolkit.Indexing.Indexers.BuildIndexer<Thing>(DynamicFiltersToolkitConstants.ThingFilter.StorageIdKey.Name, x => x.Include<string>(DynamicFiltersToolkitConstants.ThingFilter.StorageIdKey, true));
-            Toolkit.Indexing.Indexers.BuildIndexer<Thing>(DynamicFiltersToolkitConstants.ThingFilter.StorageKey.Name, x => x.Include<string>(DynamicFiltersToolkitConstants.ThingFilter.StorageIdKey, true));
+            Toolkit.Indexing.Indexers.BuildIndexer<ThingFilter>(ToolkitConstants.Thing.Map.Name, x => x.Include<string>(ToolkitConstants.Thing.Map, true));
+            Toolkit.Indexing.Indexers.BuildIndexer<ThingFilter>(DynamicFiltersToolkitConstants.ThingFilter.StorageIdKey.Name, x => x.Include<string>(DynamicFiltersToolkitConstants.ThingFilter.StorageIdKey, true));
+            Toolkit.Indexing.Indexers.BuildIndexer<ThingFilter>(DynamicFiltersToolkitConstants.ThingFilter.StorageKey.Name, x => x.Include<string>(DynamicFiltersToolkitConstants.ThingFilter.StorageKey, true));
             Toolkit.Indexing.ReloadOrchestration();
         }
         private static void DisableStorageFiltering()
