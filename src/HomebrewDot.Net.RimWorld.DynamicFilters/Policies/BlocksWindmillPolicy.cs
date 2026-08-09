@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using HomebrewDot.Net.Rimworld.Configuration.Templates;
 using HomebrewDot.Net.Rimworld.Filtering;
 using HomebrewDot.Net.Rimworld.Filtering.Components;
+using RimWorld;
 using UnityEngine;
 using Verse;
 
@@ -29,10 +30,7 @@ namespace HomebrewDot.Net.Rimworld.Policies
         public void Activate(string name, IDynamicPolicyProviderActivationContext context)
         {
             IDynamicPolicy<Map, ThingDef> policy = null;
-            policy = new DelegateDynamicPolicy<Map, ThingDef>(name, (map) => new DelegateDynamicFilter<Map, ThingDef>(map, policy, (m, def) =>
-            {
-                return def.blockWind || (def.category == ThingCategory.Plant && (def.plant?.IsTree ?? false));
-            }));
+            policy = new DelegateDynamicPolicy<Map, ThingDef>(name, (map) => new DelegateDynamicFilter<Map, ThingDef>(map, policy, (m, def) => BlocksWind(def)));
             context.WithLabel(GetTitle())
                 .WithTitle(GetTitle())
                 .WithDescription(GetShortDescription())
@@ -41,6 +39,22 @@ namespace HomebrewDot.Net.Rimworld.Policies
         /// <inheritdoc/>
         public void Deactivate(Action disposePolicies)
         {
+        }
+
+        /// <summary>
+        /// Returns whether the given def can block a windmill. Matches things with <see cref="ThingDef.blockWind"/> set,
+        /// plus all plants the game counts as trees. Covers vanilla trees (<see cref="PlantProperties.IsTree"/>) and modded
+        /// trees that only set a <see cref="TreeCategory"/> (e.g. Alpha Bees' hive trees, which use
+        /// <c>harvestTag</c> Standard and no <c>forceIsTree</c> so <see cref="PlantProperties.IsTree"/> is false).
+        /// </summary>
+        /// <param name="def">The def to check.</param>
+        /// <returns><c>true</c> if the def can block a windmill; otherwise, <c>false</c>.</returns>
+        public static bool BlocksWind(ThingDef def)
+        {
+            return def.blockWind
+                || (def.category == ThingCategory.Plant
+                    && def.plant != null
+                    && (def.plant.IsTree || def.plant.treeCategory != TreeCategory.None));
         }
 
         /// <inheritdoc/>

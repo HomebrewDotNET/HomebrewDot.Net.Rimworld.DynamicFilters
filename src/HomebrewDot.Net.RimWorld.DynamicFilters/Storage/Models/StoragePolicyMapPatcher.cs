@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using HarmonyLib;
 using HomebrewDot.Net.Rimworld.Filtering.Components;
 using HomebrewDot.Net.Rimworld.Indexing;
+using HomebrewDot.Net.Rimworld.Patches;
 using UnityEngine;
 using Verse;
 using static HomebrewDot.Net.Rimworld.Toolkit.Helpers;
@@ -141,7 +142,7 @@ namespace HomebrewDot.Net.Rimworld.Storage.Models
 
             var thingPolicies = manager.GetActiveThingPolicyNames();
             var defPolicies = manager.GetActiveDefPolicyNames();
-            bool hasThings = thingPolicies != null && thingPolicies.Count > 0;
+            bool hasThings = !BetterWorkbenchManagementSupport.IsDefOnlyFilter(filter) && thingPolicies != null && thingPolicies.Count > 0;
             bool hasDefs = defPolicies != null && defPolicies.Count > 0;
 
             if (!hasThings && !hasDefs)

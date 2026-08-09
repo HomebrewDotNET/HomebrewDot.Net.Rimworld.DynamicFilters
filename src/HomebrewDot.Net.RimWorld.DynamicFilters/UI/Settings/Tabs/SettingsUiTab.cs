@@ -35,6 +35,12 @@ namespace HomebrewDot.Net.Rimworld.UI.Settings.Tabs
                 ref enablePresets,
                 "Enables policy presets with common use cases.");
             DynamicFiltersToolkit.Settings.EnablePresets = enablePresets;
+            var showPoliciesButton = DynamicFiltersToolkit.Settings.ShowPoliciesButton;
+            listing.CheckboxLabeled(
+                "Show Policies button in toolbar",
+                ref showPoliciesButton,
+                "Adds a Policies button to the bottom toolbar that opens the mod settings with the Policies tab selected.");
+            DynamicFiltersToolkit.Settings.ShowPoliciesButton = showPoliciesButton;
 
             listing.GapLine(12f);
             DrawFailedTemplateCleanup(listing);

@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.CompilerServices;
@@ -39,8 +39,7 @@ namespace HomebrewDot.Net.Rimworld.Filtering.Components
         }
 
         // Fields
-        private readonly object _lock = new object();
-        private readonly Dictionary<string, IDynamicFilter<Map, Thing>> _thingFilters = new Dictionary<string, IDynamicFilter<Map, Thing>>();
+                private readonly Dictionary<string, IDynamicFilter<Map, Thing>> _thingFilters = new Dictionary<string, IDynamicFilter<Map, Thing>>();
         private readonly Dictionary<string, IDynamicFilter<Map, ThingDef>> _defFilters = new Dictionary<string, IDynamicFilter<Map, ThingDef>>();
         private Dictionary<ThingFilter, string> _filterToThingCache = new Dictionary<ThingFilter, string>();
         private Dictionary<ThingFilter, string> _filterToDefCache = new Dictionary<ThingFilter, string>();
@@ -98,8 +97,7 @@ namespace HomebrewDot.Net.Rimworld.Filtering.Components
             }
             if (table.TryFind<ThingFilter>(filter, out var indexed))
             {
-                lock (_lock)
-                {
+                                {
                     var storageId = indexed.GetValue<string>(DynamicFiltersToolkitConstants.ThingFilter.StorageIdKey.Name);
                     if (string.IsNullOrWhiteSpace(storageId))
                     {
@@ -196,8 +194,7 @@ namespace HomebrewDot.Net.Rimworld.Filtering.Components
             }
             if (table.TryFind<ThingFilter>(filter, out var indexed))
             {
-                lock (_lock)
-                {
+                                {
                     var storageId = indexed.GetValue<string>(DynamicFiltersToolkitConstants.ThingFilter.StorageIdKey.Name);
                     if (!string.IsNullOrWhiteSpace(storageId))
                     {
@@ -266,8 +263,7 @@ namespace HomebrewDot.Net.Rimworld.Filtering.Components
         /// <returns>The active policy names.</returns>
         public IReadOnlyCollection<string> GetActiveDefPolicyNames()
         {
-            lock (_lock)
-            {
+                        {
                 return _defFilters.Keys;
             }
         }
@@ -277,8 +273,7 @@ namespace HomebrewDot.Net.Rimworld.Filtering.Components
         /// <returns>The active policy names.</returns>
         public IReadOnlyCollection<string> GetActiveThingPolicyNames()
         {
-            lock (_lock)
-            {
+                        {
                 return _thingFilters.Keys;
             }
         }
@@ -321,8 +316,7 @@ namespace HomebrewDot.Net.Rimworld.Filtering.Components
                     {
                         if (_storageToThingFilterMap.TryGetValue(storageId, out var mappedPolicyName))
                         {
-                            lock (_lock)
-                            {
+                                                        {
                                 _filterToThingCache[filter] = mappedPolicyName;
                             }
                             policyName = mappedPolicyName;
@@ -333,8 +327,7 @@ namespace HomebrewDot.Net.Rimworld.Filtering.Components
                     {
                         if(_storageToDefFilterMap.TryGetValue(storageId, out var mappedPolicyName))
                         {
-                            lock (_lock)
-                            {
+                                                        {
                                 _filterToDefCache[filter] = mappedPolicyName;
                             }
                             policyName = mappedPolicyName;
@@ -353,8 +346,7 @@ namespace HomebrewDot.Net.Rimworld.Filtering.Components
         /// <returns>A list of active <see cref="IDynamicFilter{Map, Thing}"/> instances.</returns>
         public IEnumerable<IDynamicFilter<Map, Thing>> GetActiveThingFilters()
         {
-            lock (_lock)
-            {
+                        {
                 return _thingFilters.Values.ToList();
             }
         }
@@ -364,8 +356,7 @@ namespace HomebrewDot.Net.Rimworld.Filtering.Components
         /// <returns>A list of active <see cref="IDynamicFilter{Map, ThingDef}"/> instances.</returns>
         public IEnumerable<IDynamicFilter<Map, ThingDef>> GetActiveDefFilters()
         {
-            lock (_lock)
-            {
+                        {
                 return _defFilters.Values.ToList();
             }
         }
@@ -378,8 +369,7 @@ namespace HomebrewDot.Net.Rimworld.Filtering.Components
         /// <returns>True if a filter is found; otherwise, false.</returns>
         public bool TryGetDefFilter(string policyName, out IDynamicFilter<Map, ThingDef> filter)
         {
-            lock (_lock)
-            {
+                        {
                 return _defFilters.TryGetValue(policyName, out filter);
             }
         }
@@ -391,8 +381,7 @@ namespace HomebrewDot.Net.Rimworld.Filtering.Components
         /// <returns>True if a filter is found; otherwise, false.</returns>
         public bool TryGetThingFilter(string policyName, out IDynamicFilter<Map, Thing> filter)
         {
-            lock (_lock)
-            {
+                        {
                 return _thingFilters.TryGetValue(policyName, out filter);
             }
         }
@@ -417,8 +406,7 @@ namespace HomebrewDot.Net.Rimworld.Filtering.Components
                 var storageId = indexed.GetValue<string>(DynamicFiltersToolkitConstants.ThingFilter.StorageIdKey.Name);
                 if (!string.IsNullOrWhiteSpace(storageId) && _storageToDefFilterMap.TryGetValue(storageId, out var policyName))
                 {
-                    lock (_lock)
-                    {
+                                        {
                         _filterToDefCache[filter] = policyName;
                     }
                     return TryGetDefFilter(policyName, out activeFilter);
@@ -447,8 +435,7 @@ namespace HomebrewDot.Net.Rimworld.Filtering.Components
                 var storageId = indexed.GetValue<string>(DynamicFiltersToolkitConstants.ThingFilter.StorageIdKey.Name);
                 if (!string.IsNullOrWhiteSpace(storageId) && _storageToThingFilterMap.TryGetValue(storageId, out var policyName))
                 {
-                    lock (_lock)
-                    {
+                                        {
                         _filterToThingCache[filter] = policyName;
                     }
                     return TryGetThingFilter(policyName, out activeFilter);
@@ -498,8 +485,7 @@ namespace HomebrewDot.Net.Rimworld.Filtering.Components
         private void MaintainActivePolicies(bool force = false)
         {
             ThingFilter[] activeFilters;
-            lock (_lock)
-            {
+                        {
                 activeFilters = _filterToDefCache.Keys.ToArray();
             }
 
@@ -515,8 +501,7 @@ namespace HomebrewDot.Net.Rimworld.Filtering.Components
             {
                 if(!table.TryFind<ThingFilter>(filter, out var indexed))
                 {
-                    lock (_lock)
-                    {
+                                        {
                         Log($"Filter {filter} is no longer indexed, removing from cache and policy management for map {map}");
                         _filterToDefCache.Remove(filter);
                         _filterCache.Remove(filter);
@@ -619,8 +604,7 @@ namespace HomebrewDot.Net.Rimworld.Filtering.Components
             var tickerType = useLongTick ? TickerType.Long : TickerType.Rare;
             if (arg.TickerType == tickerType)
             {
-                lock (_lock)
-                {
+                                {
                     foreach (var filter in _thingFilters.Values)
                     {
                         Invoking.Safe(() => filter.Update(StateStore.GetChildStore(map)));
@@ -636,8 +620,7 @@ namespace HomebrewDot.Net.Rimworld.Filtering.Components
         {
             policyName = Guard.NotNullOrWhitespace(policyName, nameof(policyName));
             _filterCache.Clear();
-            lock (_lock)
-            {
+                        {
                 var thingPolicy = Toolkit.Services.Get<IDynamicPolicy<Map, Thing>>(policyName);
                 if (thingPolicy != null)
                 {
@@ -666,8 +649,7 @@ namespace HomebrewDot.Net.Rimworld.Filtering.Components
         {
             policyName = Guard.NotNullOrWhitespace(policyName, nameof(policyName));
             _filterCache.Clear();
-            lock (_lock)
-            {
+                        {
                 if (_thingFilters.TryGetValue(policyName, out var filter))
                 {
                     _thingFilters.Remove(policyName);
@@ -714,3 +696,4 @@ namespace HomebrewDot.Net.Rimworld.Filtering.Components
         }
     }
 }
+

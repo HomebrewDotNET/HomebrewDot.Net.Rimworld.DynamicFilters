@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<Defs>
+
+  <MainButtonDef>
+    <defName>HomebrewDot_Policies</defName>
+    <label>policies</label>
+    <description>Open the Dynamic Filters mod settings with the Policies tab selected.</description>
+    <workerClass>HomebrewDot.Net.Rimworld.UI.PoliciesButtonWorker</workerClass>
+    <buttonVisible>true</buttonVisible>
+    <order>100</order>
+    <validWithoutMap>true</validWithoutMap>
+  </MainButtonDef>
+
+</Defs>

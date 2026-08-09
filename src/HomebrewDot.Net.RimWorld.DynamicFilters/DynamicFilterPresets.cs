@@ -39,6 +39,26 @@ namespace HomebrewDot.Net.Rimworld
         /// </summary>
         public const string MetalPreset = "Metallic";
         /// <summary>
+        /// Policy name for the preset that contains all wooden stuff.
+        /// </summary>
+        public const string WoodyPreset = "Wood";
+        /// <summary>
+        /// Policy name for the preset that contains all stony stuff.
+        /// </summary>
+        public const string StonyPreset = "Stony";
+        /// <summary>
+        /// Policy name for the preset that contains all fabric stuff.
+        /// </summary>
+        public const string FabricPreset = "Fabric";
+        /// <summary>
+        /// Policy name for the preset that contains all leather stuff.
+        /// </summary>
+        public const string LeatheryPreset = "Leather";
+        /// <summary>
+        /// Policy name for the preset that contains all plant matter.
+        /// </summary>
+        public const string PlantMatterPreset = "Plant Matter";
+        /// <summary>
         /// Policy name for the preset that contains all ingestible items.
         /// </summary>
         public const string IngestiblePreset = "Ingestible";
@@ -135,6 +155,38 @@ namespace HomebrewDot.Net.Rimworld
         /// </summary>
         public const string CoffeeAndTeaPreset = "Coffee & Tea";
         /// <summary>
+        /// Policy name for the preset that contains all perishable items (items with CompProperties_Rottable - needs freezer).
+        /// </summary>
+        public const string PerishesPreset = "Perishes";
+        /// <summary>
+        /// Policy name for the preset that contains all things that are currently rotting.
+        /// </summary>
+        public const string RottingPreset = "Rotting";
+        /// <summary>
+        /// Policy name for the preset that contains all smeltable items.
+        /// </summary>
+        public const string SmeltablePreset = "Smeltable";
+        /// <summary>
+        /// Policy name for the preset that contains all items that deteriorate when left outside.
+        /// </summary>
+        public const string DeterioratesPreset = "Deteriorates";
+        /// <summary>
+        /// Policy name for the preset that contains all biocoded items (bound to a specific pawn).
+        /// </summary>
+        public const string BiocodedPreset = "Biocoded";
+        /// <summary>
+        /// Policy name for the preset that contains all items with no quality.
+        /// </summary>
+        public const string NoQualityPreset = "No Quality";
+        /// <summary>
+        /// Policy name for the preset that contains all things whose tech level is above the tech level of the faction that owns the map.
+        /// </summary>
+        public const string AboveTechLevelPreset = "Above TechLevel";
+        /// <summary>
+        /// Policy name for the preset that contains all things whose tech level is below the tech level of the faction that owns the map.
+        /// </summary>
+        public const string BelowTechLevelPreset = "Below TechLevel";
+        /// <summary>
         /// Adds a preset provider to the toolkit. The provided action will be called with an activator that can be used to activate policies.
         /// Mainly used by patches.
         /// </summary>
@@ -156,6 +208,25 @@ namespace HomebrewDot.Net.Rimworld
             CreateSimple(ResourcePreset, "Filters all resource defs", CreatePropertyCondition(Toolkit.Helpers.Expression.GetMember<ThingDef, bool>(x => x.CountAsResource).Name, EqualsOperatorType.DefaultTypeName, true), true);
             CreateSimple(MeatPreset, "Filters all meat defs", CreatePropertyCondition(Toolkit.Helpers.Expression.GetMember<ThingDef, bool>(x => x.IsMeat).Name, EqualsOperatorType.DefaultTypeName, true), true);
             CreateSimple(MetalPreset, "Filters all metallic defs", CreatePropertyCondition(Toolkit.Helpers.Expression.GetMember<ThingDef, bool>(x => x.IsMetal).Name, EqualsOperatorType.DefaultTypeName, true), true);
+            CreateSimple(WoodyPreset, "Filters all wooden stuff", BuildConditions(builder =>
+                builder.Compare.Indexed(nameof(ThingDef.stuffCategories))
+                       .With.Contains()
+                       .To.StuffCategory("Woody")), true);
+            CreateSimple(StonyPreset, "Filters all stony stuff", BuildConditions(builder =>
+                builder.Compare.Indexed(nameof(ThingDef.stuffCategories))
+                       .With.Contains()
+                       .To.StuffCategory("Stony")), true);
+            CreateSimple(FabricPreset, "Filters all fabric stuff", BuildConditions(builder =>
+                builder.Compare.Indexed(nameof(ThingDef.stuffCategories))
+                       .With.Contains()
+                       .To.StuffCategory("Fabric")), true);
+            CreateSimple(LeatheryPreset, "Filters all leather stuff", BuildConditions(builder =>
+                builder.Compare.Indexed(nameof(ThingDef.stuffCategories))
+                       .With.Contains()
+                       .To.StuffCategory("Leathery")), true);
+            CreateSimple(PlantMatterPreset, "Filters all plant matter", BuildConditions(builder =>
+                builder.Compare.Self()
+                       .With.InThingCategory("PlantMatter")), true);
             CreateSimple(IngestiblePreset, "Filters all defs that can be ingested", CreatePropertyCondition(Toolkit.Helpers.Expression.GetMember<ThingDef, bool>(x => x.IsIngestible).Name, EqualsOperatorType.DefaultTypeName, true), true);
             CreateSimple(FoodPreset, "Filters all defs that can be ingested and provides nutrition", CreatePropertyCondition(Toolkit.Helpers.Expression.GetMember<ThingDef, bool>(x => x.IsNutritionGivingIngestible).Name, EqualsOperatorType.DefaultTypeName, true), true);
             CreateSimple(MealPreset, "Filters all meal defs", CreatePropertyCondition($"{Toolkit.Helpers.Expression.GetMember<ThingDef, IngestibleProperties>(x => x.ingestible).Name}.{Toolkit.Helpers.Expression.GetMember<ThingDef, FoodPreferability>(x => x.ingestible.preferability).Name}",
@@ -186,15 +257,46 @@ namespace HomebrewDot.Net.Rimworld
             CreateSimple(FlammablePreset, "Filters all defs that are flammable", CreateStatCondition(StatDefOf.Flammability, GreaterOperatorType.DefaultTypeName, 0), true);
             CreateSimple(ButcheryCorpsePreset, "Filters all non-humanoid, non-mechanoid corpses for butchering",
                 ConditionBuilder.Build(builder =>
-                    builder.Compare.Indexed(Toolkit.Helpers.Expression.GetMember<ThingDef, bool>(x => x.IsCorpse).Name)
-                           .With.True()
-                           .And
-                           .Compare.Indexed($"{nameof(ThingDef.race)}.{nameof(RaceProperties.Humanlike)}")
-                           .With.False()
-                           .And
-                           .Compare.Indexed($"{nameof(ThingDef.race)}.{nameof(RaceProperties.IsMechanoid)}")
-                           .With.False()
-                ).Conditions.Select(x => SimpleFilterPolicyCondition.FromDef(x)).ToArray(),
+                {
+                    var condition = builder.Compare.Indexed(Toolkit.Helpers.Expression.GetMember<ThingDef, bool>(x => x.IsCorpse).Name)
+                                           .With.True()
+                                           .And
+                                           .Compare.Indexed($"{nameof(ThingDef.race)}.{nameof(RaceProperties.Humanlike)}")
+                                           .With.False()
+                                           .And
+                                           .Compare.Indexed($"{nameof(ThingDef.race)}.{nameof(RaceProperties.IsMechanoid)}")
+                                           .With.False();
+                    // Big and Small - Framework adds robot corpses under BS_RobotCorpses. They are non-humanoid,
+                    // non-mechanoid and would otherwise be treated as butcherable, so exclude them.
+                    if (ToolkitConstants.Mods.BigAndSmall.IsLoaded)
+                    {
+                        condition = condition.And
+                                             .Compare.Self()
+                                             .With.InThingCategory(ToolkitConstants.Mods.BigAndSmall.RobotCorpseCategoryDefName)
+                                             .Not();
+                    }
+                    // Vanilla Quests Expanded - Drone Factory adds drone corpses. They are non-humanoid,
+                    // non-mechanoid and would otherwise be treated as butcherable, so exclude them.
+                    // With Odyssey loaded the mod patches the VQE_Drone flesh type's corpseCategory to
+                    // Odyssey's CorpsesDrone, which empties VQE_CorpsesDrone, so only check it without Odyssey.
+                    if (ToolkitConstants.Mods.VqeDroneFactory.IsLoaded && !ToolkitConstants.Odyssey.IsLoaded)
+                    {
+                        condition = condition.And
+                                             .Compare.Self()
+                                             .With.InThingCategory(ToolkitConstants.Mods.VqeDroneFactory.DroneCorpseCategoryDefName)
+                                             .Not();
+                    }
+                    // The Odyssey expansion defines CorpsesDrone, and the drone factory mod re-targets its drone
+                    // corpses there via a patch when Odyssey is active. Odyssey's own drone corpses use it too,
+                    // so exclude it whenever Odyssey is loaded.
+                    if (ToolkitConstants.Odyssey.IsLoaded)
+                    {
+                        condition = condition.And
+                                             .Compare.Self()
+                                             .With.InThingCategory(ToolkitConstants.Odyssey.DroneCorpseCategoryDefName)
+                                             .Not();
+                    }
+                }).Conditions.Select(x => SimpleFilterPolicyCondition.FromDef(x)).ToArray(),
                 true);
             CreateSimple(HumanoidCorpsePreset, "Filters all humanoid corpses",
                 ConditionBuilder.Build(builder =>
@@ -216,22 +318,40 @@ namespace HomebrewDot.Net.Rimworld
                 true);
             Toolkit.Indexing.Def.Thing.TrackIsFoul();
             CreateSimple(FoulMeatPreset, "Filters all foul meat (human, insect, twisted, etc.)",
-                ConditionBuilder.Build(builder =>
-                    builder.Compare.Indexed(ToolkitConstants.Def.Thing.IsFoul.Name)
-                           .With.True()
-                           .And
-                           .Compare.Indexed(Toolkit.Helpers.Expression.GetMember<ThingDef, bool>(x => x.IsMeat).Name)
-                           .With.True()
-                ).Conditions.Select(x => SimpleFilterPolicyCondition.FromDef(x)).ToArray(),
+                BuildConditions(builder =>
+                {
+                    // The Bad Meat Category mod moves defs out of MeatRaw (so IsMeat becomes false for them),
+                    // hence the top-level OR: (isFoul AND isMeat) OR (in MeatBad).
+                    var foulMeat = builder.Compare.Indexed(ToolkitConstants.Def.Thing.IsFoul.Name)
+                                          .With.True()
+                                          .And
+                                          .Compare.Indexed(Toolkit.Helpers.Expression.GetMember<ThingDef, bool>(x => x.IsMeat).Name)
+                                          .With.True();
+                    if (ToolkitConstants.Mods.BadMeatCategory.IsLoaded)
+                    {
+                        _ = foulMeat.Or
+                                   .Compare.Self()
+                                   .With.InThingCategory(ToolkitConstants.Mods.BadMeatCategory.MeatBadCategoryDefName);
+                    }
+                }),
                 true);
             CreateSimple(FoulLeatherPreset, "Filters all foul leather (human, insect, etc.)",
-                ConditionBuilder.Build(builder =>
-                    builder.Compare.Indexed(ToolkitConstants.Def.Thing.IsFoul.Name)
-                           .With.True()
-                           .And
-                           .Compare.Indexed(Toolkit.Helpers.Expression.GetMember<ThingDef, bool>(x => x.IsLeather).Name)
-                           .With.True()
-                ).Conditions.Select(x => SimpleFilterPolicyCondition.FromDef(x)).ToArray(),
+                BuildConditions(builder =>
+                {
+                    // The Bad Leather Category mod moves defs out of Leathers (so IsLeather becomes false for them),
+                    // hence the top-level OR: (isFoul AND isLeather) OR (in LeatherBad).
+                    var foulLeather = builder.Compare.Indexed(ToolkitConstants.Def.Thing.IsFoul.Name)
+                                            .With.True()
+                                            .And
+                                            .Compare.Indexed(Toolkit.Helpers.Expression.GetMember<ThingDef, bool>(x => x.IsLeather).Name)
+                                            .With.True();
+                    if (ToolkitConstants.Mods.BadLeatherCategory.IsLoaded)
+                    {
+                        _ = foulLeather.Or
+                                      .Compare.Self()
+                                      .With.InThingCategory(ToolkitConstants.Mods.BadLeatherCategory.LeatherBadCategoryDefName);
+                    }
+                }),
                 true);
             Toolkit.Indexing.Def.Thing.TrackIsDrink();
             Toolkit.Indexing.Def.Thing.TrackIsAlcoholic();
@@ -279,6 +399,43 @@ namespace HomebrewDot.Net.Rimworld
                            .With.True()
                 ),
                 true);
+            CreateSimple(PerishesPreset, "Filters all perishable items (items that rot and need a freezer)",
+                BuildConditions(builder =>
+                    builder.Compare.Comp(typeof(CompProperties_Rottable))
+                           .With.NotNull()
+                ),
+                true);
+            CreateSimple(RottingPreset, "Filters all things that are currently rotting",
+                BuildConditions(builder =>
+                    builder.Compare.Comp($"{typeof(CompRottable).FullName}{CompReferenceType.PathSeparator}{nameof(CompRottable.Stage)}")
+                           .With.Equal()
+                           .To.Value(RotStage.Rotting)
+                ),
+                false);
+            CreateSimple(SmeltablePreset, "Filters all things that can be smelted at a smelter (matches vanilla Allow Smeltable)",
+                CreateSmeltableCondition(),
+                false);
+            CreateSimple(DeterioratesPreset, "Filters all items that deteriorate when left outside",
+                CreateStatCondition(StatDefOf.DeteriorationRate, GreaterOperatorType.DefaultTypeName, 0),
+                true);
+            CreateSimple(BiocodedPreset, "Filters all biocoded items (bound to a specific pawn)",
+                BuildConditions(builder =>
+                    builder.Compare.Comp($"{typeof(CompBiocodable).FullName}{CompReferenceType.PathSeparator}{nameof(CompBiocodable.Biocoded)}")
+                           .With.True()
+                ),
+                false);
+            CreateSimple(NoQualityPreset, "Filters all items with no quality (raw resources, components, etc.)",
+                BuildConditions(builder =>
+                    builder.Compare.Comp(typeof(CompQuality))
+                           .With.Null()
+                ),
+                false);
+            CreateSimple(AboveTechLevelPreset, "Filters all things whose tech level is above the tech level of the faction that owns the map",
+                CreateTechLevelCondition(GreaterOperatorType.DefaultTypeName),
+                false);
+            CreateSimple(BelowTechLevelPreset, "Filters all things whose tech level is below the tech level of the faction that owns the map",
+                CreateTechLevelCondition(LesserOperatorType.DefaultTypeName),
+                false);
             Presets((name, description, template, settings) =>
             {
                 CreatePreset(name, description, template, settings);
@@ -315,6 +472,60 @@ namespace HomebrewDot.Net.Rimworld
             {
                 SimpleFilterPolicyCondition.FromDef(conditionDef)
             };
+        }
+
+        /// <summary>
+        /// Creates a condition comparing the tech level of a thing's def against the tech level of the faction that owns the map the thing is on.
+        /// Things without a tech level (TechLevel.Undefined) are excluded, as are things on maps without a parent faction.
+        /// Collections evaluate <see cref="IIndexed{Thing}"/> entries, so both operands must use the Indexed reference type: the first path segment resolves from the indexed value's member or metadata, and the remainder is traversed on the resolved object.
+        /// </summary>
+        /// <param name="operator">The operator to use for the comparison (e.g. GreaterThan for above, LessThan for below).</param>
+        /// <returns>An array of SimpleFilterPolicyCondition objects.</returns>
+        public static SimpleFilterPolicyCondition[] CreateTechLevelCondition(string @operator)
+        {
+            return BuildConditions(builder =>
+                builder.Compare.Indexed($"{nameof(Thing.def)}.{nameof(ThingDef.techLevel)}")
+                       .With.NotEqual()
+                       .To.Value(TechLevel.Undefined)
+                       .And
+                       .Compare.Indexed($"{nameof(Thing.Map)}.{nameof(Map.ParentFaction)}")
+                       .With.NotNull()
+                       .And
+                       .Compare.Indexed($"{nameof(Thing.def)}.{nameof(ThingDef.techLevel)}")
+                       .With.Operator(@operator)
+                       .To.Indexed($"{nameof(Thing.Map)}.{nameof(Map.ParentFaction)}.{nameof(Faction.def)}.{nameof(FactionDef.techLevel)}"));
+        }
+
+        /// <summary>
+        /// Creates thing-level conditions that mirror the game's per-instance smeltability check, i.e. the same
+        /// logic as <see cref="Thing.Smeltable"/> and the vanilla "Allow Smeltable" special thing filter. A thing is
+        /// smeltable when its def is marked <see cref="ThingDef.smeltable"/> and, when the def is made from stuff, the
+        /// stuff is smeltable too (e.g. a steel club is smeltable, a wooden club is not). To match non-smeltable
+        /// things, invert this condition (Not) in the filter settings.
+        /// Collections evaluate <see cref="IIndexed{T}"/> entries, so both operands use the Indexed reference type:
+        /// the first path segment resolves from the indexed value's member or metadata, and the remainder is
+        /// traversed on the resolved object.
+        /// </summary>
+        /// <returns>An array of SimpleFilterPolicyCondition objects.</returns>
+        public static SimpleFilterPolicyCondition[] CreateSmeltableCondition()
+        {
+            var defSmeltable = $"{nameof(Thing.def)}.{nameof(ThingDef.smeltable)}";
+            var madeFromStuff = $"{nameof(Thing.def)}.{nameof(ThingDef.MadeFromStuff)}";
+            var stuffSmeltable = $"{nameof(Thing.Stuff)}.{nameof(ThingDef.smeltable)}";
+
+            return BuildConditions(builder =>
+            {
+                // def.smeltable AND (not made from stuff OR stuff is smeltable)
+                builder.Compare.Indexed(defSmeltable)
+                       .With.True()
+                       .And
+                       .Group(stuff => stuff
+                           .Compare.Indexed(madeFromStuff)
+                           .With.False()
+                           .Or
+                           .Compare.Indexed(stuffSmeltable)
+                           .With.True());
+            });
         }
 
         /// <summary>
@@ -378,7 +589,6 @@ namespace HomebrewDot.Net.Rimworld
         {
             modIdRegex = Guard.NotNull(modIdRegex, nameof(modIdRegex));
 
-            Toolkit.Indexing.Thing.TrackModId();
             var conditionDef = ConditionBuilder.Build(builder =>
             {
                 builder.Compare.Indexed(ToolkitConstants.Thing.ModId.Name)
@@ -398,7 +608,6 @@ namespace HomebrewDot.Net.Rimworld
         {
             modId = Guard.NotNullOrWhitespace(modId, nameof(modId));
 
-            Toolkit.Indexing.Thing.TrackModId();
             var conditionDef = ConditionBuilder.Build(builder =>
             {
                 builder.Compare.Indexed(ToolkitConstants.Thing.ModId.Name)

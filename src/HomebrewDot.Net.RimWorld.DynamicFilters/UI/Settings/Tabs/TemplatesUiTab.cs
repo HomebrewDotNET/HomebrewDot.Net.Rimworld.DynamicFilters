@@ -23,6 +23,8 @@ namespace HomebrewDot.Net.Rimworld.UI.Settings.Tabs
         private string _editingStorageKey;
         private IExposable _workingSettings;
         private string[] _validationErrors = Array.Empty<string>();
+        private string _templateSearch = string.Empty;
+        private bool _hideActivatedSingletons;
 
         private bool IsEditing => !string.IsNullOrWhiteSpace(_editingStorageKey);
 
@@ -54,7 +56,7 @@ namespace HomebrewDot.Net.Rimworld.UI.Settings.Tabs
         /// <inheritdoc/>
         public void Draw(Rect rect)
         {
-            var templates = DynamicFiltersToolkit.Templates.All.OrderBy(t => t.GetTitle(), StringComparer.OrdinalIgnoreCase).ToList();
+            var templates = GetFilteredTemplates();
             var selectedTemplate = ResolveSelectedTemplate(templates);
 
             var leftRect = new Rect(rect.x, rect.y, rect.width * ListWidthRatio, rect.height);
@@ -62,6 +64,36 @@ namespace HomebrewDot.Net.Rimworld.UI.Settings.Tabs
 
             DrawTemplateList(leftRect, templates, selectedTemplate);
             DrawSelectedTemplate(rightRect, selectedTemplate);
+        }
+
+        private List<IDynamicPolicyTemplate> GetFilteredTemplates()
+        {
+            IEnumerable<IDynamicPolicyTemplate> templates = DynamicFiltersToolkit.Templates.All
+                .OrderBy(t => t.GetTitle(), StringComparer.OrdinalIgnoreCase);
+
+            if (_hideActivatedSingletons)
+            {
+                templates = templates.Where(t => !t.Singleton || GetSingletonActivePolicyName(t) == null);
+            }
+
+            var query = _templateSearch?.Trim();
+            if (!string.IsNullOrWhiteSpace(query))
+            {
+                templates = templates.Where(t => MatchesSearch(t, query));
+            }
+
+            return templates.ToList();
+        }
+
+        private static bool MatchesSearch(IDynamicPolicyTemplate template, string query)
+        {
+            if (template.GetTitle().IndexOf(query, StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                return true;
+            }
+
+            var description = template.GetShortDescription();
+            return !string.IsNullOrEmpty(description) && description.IndexOf(query, StringComparison.OrdinalIgnoreCase) >= 0;
         }
 
         private IDynamicPolicyTemplate ResolveSelectedTemplate(List<IDynamicPolicyTemplate> templates)
@@ -79,9 +111,24 @@ namespace HomebrewDot.Net.Rimworld.UI.Settings.Tabs
         {
             Widgets.DrawMenuSection(rect);
             var innerRect = rect.ContractedBy(8f);
-            Widgets.Label(new Rect(innerRect.x, innerRect.y, innerRect.width, 24f), "Available Templates");
 
-            var listOutRect = new Rect(innerRect.x, innerRect.y + 28f, innerRect.width, Mathf.Max(0f, innerRect.height - 28f));
+            var cursorY = innerRect.y;
+            Widgets.Label(new Rect(innerRect.x, cursorY, innerRect.width, 24f), "Available Templates");
+            cursorY += 26f;
+
+            Widgets.Label(new Rect(innerRect.x, cursorY, 64f, 24f), "Search:");
+            var searchRect = new Rect(innerRect.x + 68f, cursorY - 2f, Mathf.Max(120f, innerRect.width - 68f), 28f);
+            var nextSearch = Widgets.TextField(searchRect, _templateSearch ?? string.Empty);
+            if (!string.Equals(nextSearch, _templateSearch, StringComparison.Ordinal))
+            {
+                _templateSearch = nextSearch;
+            }
+            cursorY += 32f;
+
+            Widgets.CheckboxLabeled(new Rect(innerRect.x, cursorY, innerRect.width, 24f), "Hide activated singleton templates", ref _hideActivatedSingletons);
+            cursorY += 26f;
+
+            var listOutRect = new Rect(innerRect.x, cursorY, innerRect.width, Mathf.Max(0f, innerRect.height - (cursorY - innerRect.y)));
             var viewHeight = Mathf.Max(listOutRect.height, templates.Count * 52f + 4f);
             var listViewRect = new Rect(0f, 0f, listOutRect.width - 16f, viewHeight);
 

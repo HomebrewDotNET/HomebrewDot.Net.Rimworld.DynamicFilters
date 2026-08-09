@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Runtime;
@@ -13,6 +13,7 @@ using HomebrewDot.Net.Rimworld.Filtering.Models;
 using HomebrewDot.Net.Rimworld.Filtering.Triggers;
 using HomebrewDot.Net.Rimworld.Indexing;
 using HomebrewDot.Net.Rimworld.Indexing.Components;
+using HomebrewDot.Net.Rimworld.Patches;
 using RuntimeAudioClipLoader;
 using Verse;
 using static HomebrewDot.Net.Rimworld.DynamicFiltersToolkit.DynamicFiltersToolkitSettings;
@@ -38,13 +39,13 @@ namespace HomebrewDot.Net.Rimworld
     public class DynamicFiltersToolkit : Mod
     {
         // Statics
-        private static object _lock = new object();
-        private static DynamicFiltersToolkit _instance;
+                private static DynamicFiltersToolkit _instance;
         private static DynamicFiltersToolkitSettings _settings;
 
         // Fields
         private readonly DynamicFiltersSettingsUi _settingsUi;
-        
+        private Dialog_ModSettings _trackedSettingsDialog;
+
         // State
         private static bool _storageFilteringEnabled;
         private static bool _policiesLoadedFromSettings;
@@ -70,8 +71,7 @@ namespace HomebrewDot.Net.Rimworld
             get
             {
                 if (_settings != null) return _settings;
-                lock (_lock)
-                {
+                                {
                     if (_settings == null)
                     {
                         _settings = Instance.GetSettings<DynamicFiltersToolkitSettings>();
@@ -98,6 +98,13 @@ namespace HomebrewDot.Net.Rimworld
         /// <inheritdoc/>
         public override void DoSettingsWindowContents(Rect inRect)
         {
+            var dialog = Find.WindowStack.Windows.OfType<Dialog_ModSettings>().FirstOrDefault();
+            if (dialog != null && !ReferenceEquals(dialog, _trackedSettingsDialog))
+            {
+                _trackedSettingsDialog = dialog;
+                _settingsUi.OnSettingsDialogOpened();
+            }
+
             if(!_policiesLoadedFromSettings)
             {
                 if (IsVerboseEnabled) LogVerbose("Loading activated templates from settings...");
@@ -106,6 +113,22 @@ namespace HomebrewDot.Net.Rimworld
             }
             _settingsUi.Draw(inRect);
             base.DoSettingsWindowContents(inRect);
+        }
+
+        /// <summary>
+        /// Opens the mod settings with the Policies tab preselected. If the settings dialog is already open,
+        /// switches to the Policies tab instead of opening another dialog.
+        /// </summary>
+        internal void OpenPoliciesSettings()
+        {
+            if (Find.WindowStack.IsOpen<Dialog_ModSettings>())
+            {
+                _settingsUi.SelectPoliciesTabImmediately();
+                return;
+            }
+
+            _settingsUi.SelectPoliciesTab();
+            Find.WindowStack.Add(new Dialog_ModSettings(this));
         }
 
         internal static void ConfigureServices()
@@ -154,12 +177,20 @@ namespace HomebrewDot.Net.Rimworld
             Indexing.ThingFilter.EnsureGatherer();
             Indexing.ThingFilter.EnsureTable();
             StoragePolicyMapPatcher.ApplyPatches();
+            BetterWorkbenchManagementSupport.ApplyPatches();
             Templates.AddTemplate(BlocksWindmillPolicy.Instance);
             Templates.AddTemplate(SimpleFilterPolicy.Instance);
             Templates.AddTemplate(ComplexFilterPolicy.Instance);
-            Toolkit.Indexing.Indexers.BuildIndexer<ThingFilter>(ToolkitConstants.Thing.Map.Name, x => x.Include<string>(ToolkitConstants.Thing.Map, true));
+
+            // Useful metadata
+            Toolkit.Indexing.Thing.TrackHitPointPercentage();
+            Toolkit.Indexing.Thing.TrackModId();
+
+            // Required metadata
+            Toolkit.Indexing.Thing.TrackMap();
+            Toolkit.Indexing.Indexers.BuildIndexer<ThingFilter>(ToolkitConstants.Thing.Map.Name, x => x.Include<Map>(ToolkitConstants.Thing.Map, true));
             Toolkit.Indexing.Indexers.BuildIndexer<ThingFilter>(DynamicFiltersToolkitConstants.ThingFilter.StorageIdKey.Name, x => x.Include<string>(DynamicFiltersToolkitConstants.ThingFilter.StorageIdKey, true));
-            Toolkit.Indexing.Indexers.BuildIndexer<ThingFilter>(DynamicFiltersToolkitConstants.ThingFilter.StorageKey.Name, x => x.Include<string>(DynamicFiltersToolkitConstants.ThingFilter.StorageKey, true));
+            Toolkit.Indexing.Indexers.BuildIndexer<ThingFilter>(DynamicFiltersToolkitConstants.ThingFilter.StorageKey.Name, x => x.Include<object>(DynamicFiltersToolkitConstants.ThingFilter.StorageKey, true));
             Toolkit.Indexing.ReloadOrchestration();
         }
         private static void DisableStorageFiltering()
@@ -168,6 +199,7 @@ namespace HomebrewDot.Net.Rimworld
             _storageFilteringEnabled = false;
             Log("Disabling storage filtering...");
             StoragePolicyMapPatcher.RemovePatches();
+            BetterWorkbenchManagementSupport.RemovePatches();
         }
 
         private static void SetPresets(bool enable)
@@ -193,8 +225,7 @@ namespace HomebrewDot.Net.Rimworld
         public static class Templates
         {
             // Fields
-            private readonly static object _lock = new object();
-            private readonly static HashSet<IDynamicPolicyTemplate> _templates = new HashSet<IDynamicPolicyTemplate>();
+                        private readonly static HashSet<IDynamicPolicyTemplate> _templates = new HashSet<IDynamicPolicyTemplate>();
 
             /// <summary>
             /// Returns all available templates that can be used to create dynamic policy providers.
@@ -203,8 +234,7 @@ namespace HomebrewDot.Net.Rimworld
             {
                 get
                 {
-                    lock (_lock)
-                    {
+                                        {
                         return _templates.OrderBy(x => x.StorageKey).ToList().AsReadOnly();
                     }
                 }
@@ -215,8 +245,7 @@ namespace HomebrewDot.Net.Rimworld
             /// <param name="template">The dynamic policy template to be added.</param>
             public static void AddTemplate(IDynamicPolicyTemplate template)
             {
-                lock (_lock)
-                {
+                                {
                     if (_templates.Add(template))
                     {
                         if (IsVerboseEnabled) LogVerbose($"Added dynamic policy template: {template.GetType().FullName} with storage key {template.StorageKey}");
@@ -231,8 +260,7 @@ namespace HomebrewDot.Net.Rimworld
         public static class Policies
         {
             // Fields
-            private readonly static object _lock = new object();
-            private readonly static HashSet<IDynamicPolicyProvider> _availablePolicies = new HashSet<IDynamicPolicyProvider>();
+                        private readonly static HashSet<IDynamicPolicyProvider> _availablePolicies = new HashSet<IDynamicPolicyProvider>();
             private readonly static Dictionary<string, ActivatedPolicies> _activePolicies = new Dictionary<string, ActivatedPolicies>();
 
             // Properties
@@ -243,8 +271,7 @@ namespace HomebrewDot.Net.Rimworld
             {
                 get
                 {
-                    lock (_lock)
-                    {
+                                        {
                         return _activePolicies.Keys.OrderBy(x => x).ToList().AsReadOnly();
                     }
                 }
@@ -256,8 +283,7 @@ namespace HomebrewDot.Net.Rimworld
             {
                 get
                 {
-                    lock (_lock)
-                    {
+                                        {
                         return _activePolicies.Values.OrderBy(x => x.Name).ToList().AsReadOnly();
                     }
                 }
@@ -269,8 +295,7 @@ namespace HomebrewDot.Net.Rimworld
             /// <param name="provider">The dynamic policy provider to be added.</param>
             public static void AddProvider(IDynamicPolicyProvider provider)
             {
-                lock (_lock)
-                {
+                                {
                     if (_availablePolicies.Add(provider))
                     {
                         if (IsVerboseEnabled) LogVerbose($"Added dynamic policy provider: {provider.GetType().FullName}");
@@ -287,8 +312,7 @@ namespace HomebrewDot.Net.Rimworld
             /// <returns>True if the provider was successfully activated; otherwise, false.</returns>
             public static bool TryActivateProvider(string name, IDynamicPolicyProvider provider, bool deactivateExisting = false, bool isReadOnly = false)
             {
-                lock (_lock)
-                {
+                                {
                     if (_activePolicies.ContainsKey(name))
                     {
                         if (deactivateExisting)
@@ -315,8 +339,7 @@ namespace HomebrewDot.Net.Rimworld
             /// <param name="name">The unique name of the dynamic policy provider to be deactivated.</param>
             public static void DeactivateProvider(string name)
             {
-                lock (_lock)
-                {
+                                {
                     if (_activePolicies.TryGetValue(name, out var activatedPolicies))
                     {
                         bool disposeCalled = false;
@@ -353,8 +376,7 @@ namespace HomebrewDot.Net.Rimworld
             /// <returns>True if the rename succeeded; otherwise, false.</returns>
             public static bool RenameProvider(string oldName, string newName)
             {
-                lock (_lock)
-                {
+                                {
                     if (!_activePolicies.TryGetValue(oldName, out var activated))
                     {
                         LogWarning($"Tried to rename provider '{oldName}', but no provider with that name is active.");
@@ -423,8 +445,7 @@ namespace HomebrewDot.Net.Rimworld
             /// <param name="templates">The list of activated templates to be loaded and activated.</param>
             public static void LoadActivatedTemplates(IEnumerable<ActivatedTemplates> templates)
             {
-                lock (_lock)
-                {
+                                {
                     var seenSingletonKeys = new HashSet<string>();
                     foreach (var template in templates)
                     {
@@ -537,6 +558,10 @@ namespace HomebrewDot.Net.Rimworld
             /// </summary>
             public bool EnablePresets = false;
             /// <summary>
+            /// Shows a Policies button in the bottom toolbar that opens the mod settings with the Policies tab selected.
+            /// </summary>
+            public bool ShowPoliciesButton = false;
+            /// <summary>
             /// The list of activated templates. This can be used to restore the activated policies when the game is loaded, or to display the activated policies in the UI.
             /// </summary>
             public List<ActivatedTemplates> ActiveTemplates = new List<ActivatedTemplates>();
@@ -548,6 +573,7 @@ namespace HomebrewDot.Net.Rimworld
                 Scribe_Collections.Look(ref ActiveTemplates, nameof(ActiveTemplates), LookMode.Deep);
                 Scribe_Values.Look(ref EnablePresets, nameof(EnablePresets), defaultValue: false);
                 Scribe_Values.Look(ref EnableStorageFiltering, nameof(EnableStorageFiltering), defaultValue: true);
+                Scribe_Values.Look(ref ShowPoliciesButton, nameof(ShowPoliciesButton), defaultValue: false);
 
                 if (Scribe.mode == LoadSaveMode.Saving)
                 {
@@ -603,3 +629,5 @@ namespace HomebrewDot.Net.Rimworld
         }
     }
 }
+
+

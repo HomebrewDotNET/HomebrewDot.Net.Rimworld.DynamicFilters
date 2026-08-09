@@ -37,7 +37,7 @@ namespace HomebrewDot.Net.Rimworld
             /// <summary>
             /// Metadata key that stores the storage holder of a <see cref="Verse.ThingFilter"/>.
             /// </summary>
-            public static readonly IndexMetadataKey<string> StorageKey = IndexMetadataKey<string>.Get("DynamicFilters.Storage");
+            public static readonly IndexMetadataKey<object> StorageKey = IndexMetadataKey<object>.Get("DynamicFilters.Storage");
         }
     }
 }

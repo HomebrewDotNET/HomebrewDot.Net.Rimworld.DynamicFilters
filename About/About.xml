@@ -25,6 +25,7 @@
 	</modDependencies>
 
 	<loadAfter>
+		<li>falconne.BWM</li>
 	</loadAfter>
 
 	<loadBefore>

@@ -12,6 +12,7 @@ namespace HomebrewDot.Net.Rimworld.UI.Settings
     {
         private readonly IDynamicFiltersSettingsTab[] _allTabs;
         private int _selectedTabIndex;
+        private int _pendingTabIndex = -1;
 
         /// <inheritdoc cref="DynamicFiltersSettingsUi"/>
         public DynamicFiltersSettingsUi()
@@ -22,6 +23,60 @@ namespace HomebrewDot.Net.Rimworld.UI.Settings
                 new TemplatesUiTab(),
                 new PoliciesUiTab(),
             };
+        }
+
+        /// <summary>
+        /// Preselects the Policies tab the next time the settings dialog is opened.
+        /// </summary>
+        internal void SelectPoliciesTab()
+        {
+            if (TryGetTabIndex<PoliciesUiTab>(out var index))
+            {
+                _pendingTabIndex = index;
+            }
+        }
+
+        /// <summary>
+        /// Switches to the Policies tab immediately, for when the settings dialog is already open.
+        /// </summary>
+        internal void SelectPoliciesTabImmediately()
+        {
+            if (TryGetTabIndex<PoliciesUiTab>(out var index))
+            {
+                _pendingTabIndex = -1;
+                _selectedTabIndex = index;
+            }
+        }
+
+        /// <summary>
+        /// Applies any pending tab selection or resets to the Settings tab. Called when the settings dialog is opened fresh.
+        /// </summary>
+        internal void OnSettingsDialogOpened()
+        {
+            if (_pendingTabIndex >= 0)
+            {
+                _selectedTabIndex = _pendingTabIndex;
+                _pendingTabIndex = -1;
+            }
+            else
+            {
+                _selectedTabIndex = 0;
+            }
+        }
+
+        private bool TryGetTabIndex<T>(out int index) where T : IDynamicFiltersSettingsTab
+        {
+            for (var i = 0; i < _allTabs.Length; i++)
+            {
+                if (_allTabs[i] is T)
+                {
+                    index = i;
+                    return true;
+                }
+            }
+
+            index = -1;
+            return false;
         }
 
         /// <summary>

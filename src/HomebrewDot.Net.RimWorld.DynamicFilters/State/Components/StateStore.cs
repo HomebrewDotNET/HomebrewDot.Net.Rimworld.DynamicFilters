@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
@@ -24,7 +24,6 @@ namespace HomebrewDot.Net.Rimworld.State.Components
         // Fields
         private readonly Dictionary<string, object> _state = new(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<object, object> _childStores = new();
-        private readonly object _lock = new();
 
         // Properties
         /// <inheritdoc/>
@@ -55,25 +54,19 @@ namespace HomebrewDot.Net.Rimworld.State.Components
         /// <inheritdoc/>
         bool IStateStore<T>.DestroyChildStore<TChild>(TChild instance)
         {
-            lock(_lock)
-            {
-                return _childStores.Remove(instance);
-            }
+            return _childStores.Remove(instance);
         }
         /// <inheritdoc/>
         IStateStore<TChild> IStateStore<T>.GetChildStore<TChild>(TChild instance) where TChild : class
         {
             if(!_childStores.TryGetValue(instance, out var store))
             {
-                lock (_lock)
+                if (!_childStores.TryGetValue(instance, out store))
                 {
-                    if (!_childStores.TryGetValue(instance, out store))
-                    {
-                        store = new StateStore<TChild>(instance);
-                        _childStores.Add(instance, store);
-                    }
-                    return (IStateStore<TChild>)store;
+                    store = new StateStore<TChild>(instance);
+                    _childStores.Add(instance, store);
                 }
+                return (IStateStore<TChild>)store;
             }
             return (IStateStore<TChild>)store;
         }
@@ -102,3 +95,4 @@ namespace HomebrewDot.Net.Rimworld.State.Components
         bool IDictionary<string, object>.TryGetValue(string key, out object value) => _state.TryGetValue(key, out value);
     }
 }
+

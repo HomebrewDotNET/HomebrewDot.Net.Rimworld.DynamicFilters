@@ -24,6 +24,7 @@ namespace HomebrewDot.Net.Rimworld.UI.Settings.Tabs
         private IDynamicPolicyTemplate _editingTemplate;
         private IExposable _workingSettings;
         private string[] _validationErrors = Array.Empty<string>();
+        private string _policySearch = string.Empty;
 
         private bool IsEditing => !string.IsNullOrWhiteSpace(_editingPolicyName);
 
@@ -33,7 +34,7 @@ namespace HomebrewDot.Net.Rimworld.UI.Settings.Tabs
         /// <inheritdoc/>
         public void Draw(Rect rect)
         {
-            var policies = DynamicFiltersToolkit.Policies.ActivePoliciesInfo.Where(p => !p.IsReadOnly).OrderBy(x => x.Name, StringComparer.OrdinalIgnoreCase).ToList();
+            var policies = GetFilteredPolicies();
             var selectedPolicy = ResolveSelectedPolicy(policies);
 
             var leftRect = new Rect(rect.x, rect.y, rect.width * ListWidthRatio, rect.height);
@@ -41,6 +42,36 @@ namespace HomebrewDot.Net.Rimworld.UI.Settings.Tabs
 
             DrawPolicyList(leftRect, policies, selectedPolicy);
             DrawSelectedPolicy(rightRect, selectedPolicy);
+        }
+
+        private List<ActivatedPolicies> GetFilteredPolicies()
+        {
+            IEnumerable<ActivatedPolicies> policies = DynamicFiltersToolkit.Policies.ActivePoliciesInfo
+                .Where(p => !p.IsReadOnly)
+                .OrderBy(x => x.Name, StringComparer.OrdinalIgnoreCase);
+
+            var query = _policySearch?.Trim();
+            if (!string.IsNullOrWhiteSpace(query))
+            {
+                policies = policies.Where(p => MatchesSearch(p, query));
+            }
+
+            return policies.ToList();
+        }
+
+        private static bool MatchesSearch(ActivatedPolicies policy, string query)
+        {
+            if (policy.Name.IndexOf(query, StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                return true;
+            }
+
+            if (!string.IsNullOrEmpty(policy.Label) && policy.Label.IndexOf(query, StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                return true;
+            }
+
+            return !string.IsNullOrEmpty(policy.Title) && policy.Title.IndexOf(query, StringComparison.OrdinalIgnoreCase) >= 0;
         }
 
         private ActivatedPolicies ResolveSelectedPolicy(List<ActivatedPolicies> policies)
@@ -58,9 +89,21 @@ namespace HomebrewDot.Net.Rimworld.UI.Settings.Tabs
         {
             Widgets.DrawMenuSection(rect);
             var innerRect = rect.ContractedBy(8f);
-            Widgets.Label(new Rect(innerRect.x, innerRect.y, innerRect.width, 24f), "Active Policies");
 
-            var listOutRect = new Rect(innerRect.x, innerRect.y + 28f, innerRect.width, Mathf.Max(0f, innerRect.height - 28f));
+            var cursorY = innerRect.y;
+            Widgets.Label(new Rect(innerRect.x, cursorY, innerRect.width, 24f), "Active Policies");
+            cursorY += 26f;
+
+            Widgets.Label(new Rect(innerRect.x, cursorY, 64f, 24f), "Search:");
+            var searchRect = new Rect(innerRect.x + 68f, cursorY - 2f, Mathf.Max(120f, innerRect.width - 68f), 28f);
+            var nextSearch = Widgets.TextField(searchRect, _policySearch ?? string.Empty);
+            if (!string.Equals(nextSearch, _policySearch, StringComparison.Ordinal))
+            {
+                _policySearch = nextSearch;
+            }
+            cursorY += 32f;
+
+            var listOutRect = new Rect(innerRect.x, cursorY, innerRect.width, Mathf.Max(0f, innerRect.height - (cursorY - innerRect.y)));
             var viewHeight = Mathf.Max(listOutRect.height, policies.Count * 52f + 4f);
             var listViewRect = new Rect(0f, 0f, listOutRect.width - 16f, viewHeight);
 

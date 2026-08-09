@@ -240,8 +240,8 @@ namespace HomebrewDot.Net.Rimworld.Policies
                 {
                     x.FromDef(_settings.Collection);
                     return _settings.ThingDef ? 
-                        x.CollectFromSnapshot(d => d.GetTable<ThingDef>(Toolkit.Indexing.Def.Thing.FullTableName), d => d.GetTable<ThingDef>(Toolkit.Indexing.Def.Thing.FullTableName).Enumerate<IIndexed<ThingDef>>(), false) : 
-                        x.CollectFromSnapshot(d => d.GetTable<Thing>(Toolkit.Indexing.Thing.TableName), d => d.GetTable<Thing>(Toolkit.Indexing.Thing.TableName).Enumerate<IIndexed<Thing>>());
+                        x.CollectFromSnapshot(d => d.GetTable<ThingDef>(Toolkit.Indexing.Def.Thing.FullTableName), d => d.GetTable<ThingDef>(Toolkit.Indexing.Def.Thing.FullTableName).GetSnapshot(), false) : 
+                        x.CollectFromSnapshot(d => d.GetTable<Thing>(Toolkit.Indexing.Thing.TableName), d => d.GetTable<Thing>(Toolkit.Indexing.Thing.TableName).GetSnapshot());
                 });
 
                 context.WithLabel("Complex Filter")

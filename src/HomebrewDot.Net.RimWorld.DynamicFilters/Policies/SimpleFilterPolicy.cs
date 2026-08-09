@@ -75,23 +75,30 @@ namespace HomebrewDot.Net.Rimworld.Policies
         }
         private IEnumerable<string> ValidateCondition(SimpleFilterPolicyCondition condition)
         {
-            if (string.IsNullOrWhiteSpace(condition.Config.CompareDefault) && string.IsNullOrWhiteSpace(condition.Config.CompareType))
-            {
-                yield return "Property path cannot be empty.";
-            }
-            else if (!string.IsNullOrWhiteSpace(condition.Config.CompareDefault) && !System.Text.RegularExpressions.Regex.IsMatch(condition.Config.CompareDefault, DynamicFiltersToolkitConstants.Policy.PropertyPathRegex))
-            {
-                yield return $"Invalid property path: {condition.Config.CompareDefault}. Should match regex: {DynamicFiltersToolkitConstants.Policy.PropertyPathRegex}";
-            }
+            // Group-only conditions (from _staticDef with Conditions but no With) don't need leaf validation
+            var def = condition.Condition;
+            var isGroupOnly = def != null && def.Conditions?.Length > 0 && def.With == null;
 
-            var operatorTypes = Toolkit.Services.GetAllNamed<IOperatorType>();
-            if (string.IsNullOrWhiteSpace(condition.Config.Operator))
+            if (!isGroupOnly)
             {
-                yield return "Operator cannot be empty.";
-            }
-            else if (!operatorTypes.ContainsKey(condition.Config.Operator))
-            {
-                yield return $"Unknown operator: {condition.Config.Operator}. No operator type registered with this name.";
+                if (string.IsNullOrWhiteSpace(condition.Config.CompareDefault) && string.IsNullOrWhiteSpace(condition.Config.CompareType))
+                {
+                    yield return "Property path cannot be empty.";
+                }
+                else if (!string.IsNullOrWhiteSpace(condition.Config.CompareDefault) && !System.Text.RegularExpressions.Regex.IsMatch(condition.Config.CompareDefault, DynamicFiltersToolkitConstants.Policy.PropertyPathRegex))
+                {
+                    yield return $"Invalid property path: {condition.Config.CompareDefault}. Should match regex: {DynamicFiltersToolkitConstants.Policy.PropertyPathRegex}";
+                }
+
+                var operatorTypes = Toolkit.Services.GetAllNamed<IOperatorType>();
+                if (string.IsNullOrWhiteSpace(condition.Config.Operator))
+                {
+                    yield return "Operator cannot be empty.";
+                }
+                else if (!operatorTypes.ContainsKey(condition.Config.Operator))
+                {
+                    yield return $"Unknown operator: {condition.Config.Operator}. No operator type registered with this name.";
+                }
             }
         }
         /// <inheritdoc/>
@@ -282,7 +289,7 @@ namespace HomebrewDot.Net.Rimworld.Policies
                         var def = condition.Condition;
                         _ = x.CompareFrom(def);
                     }
-                    return _settings.ThingDef ? x.CollectFromSnapshot(d => d.GetTable<ThingDef>(Toolkit.Indexing.Def.Thing.FullTableName), d => d.GetTable<ThingDef>(Toolkit.Indexing.Def.Thing.FullTableName).Enumerate<IIndexed<ThingDef>>(), false) : x.CollectFromSnapshot(d => d.GetTable<Thing>(Toolkit.Indexing.Thing.TableName), d => d.GetTable<Thing>(Toolkit.Indexing.Thing.TableName).Enumerate<IIndexed<Thing>>());
+                    return _settings.ThingDef ? x.CollectFromSnapshot(d => d.GetTable<ThingDef>(Toolkit.Indexing.Def.Thing.FullTableName), d => d.GetTable<ThingDef>(Toolkit.Indexing.Def.Thing.FullTableName).GetSnapshot(), false) : x.CollectFromSnapshot(d => d.GetTable<Thing>(Toolkit.Indexing.Thing.TableName), d => d.GetTable<Thing>(Toolkit.Indexing.Thing.TableName).GetSnapshot());
                 });
 
                 context.WithLabel("Simple Filter")
@@ -362,6 +369,15 @@ namespace HomebrewDot.Net.Rimworld.Policies
         {
             get => Config.IsOr;
             set => Config.IsOr = value;
+        }
+
+        /// <summary>
+        /// Inverts the condition, so it matches when the underlying comparison would not match and vice versa. Default is false.
+        /// </summary>
+        public bool Inverted
+        {
+            get => Config.Inverted;
+            set => Config.Inverted = value;
         }
 
         /// <summary>
