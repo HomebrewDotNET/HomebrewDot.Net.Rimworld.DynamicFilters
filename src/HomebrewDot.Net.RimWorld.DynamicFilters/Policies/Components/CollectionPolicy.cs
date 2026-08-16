@@ -21,6 +21,7 @@ namespace HomebrewDot.Net.Rimworld.Policies.Components
     {
         // Fields
         private readonly string _name;
+        private readonly bool _requireMapContext;
 
         // State
         internal int _filterTracker;
@@ -33,21 +34,28 @@ namespace HomebrewDot.Net.Rimworld.Policies.Components
 
         /// <inheritdoc cref="CollectionPolicy"/>
         /// <param name="name">The name of the policy and the backing collection</param>
-        public CollectionPolicy(string name)
+        /// <param name="requireMapContext">If a collection scoped to the map is required. When set to false the global collection will be used instead.</param>
+        public CollectionPolicy(string name, bool requireMapContext)
         {
             _name = Guard.NotNullOrWhitespace(name, nameof(name));
+            _requireMapContext = requireMapContext;
         }
         /// <inheritdoc/>
         IDynamicFilter<Map, Thing> IDynamicPolicy<Map, Thing>.GetFilter(Map scope)
         {
             scope = Guard.NotNull(scope, nameof(scope));
 
+            if(!_requireMapContext)
+            {
+                _filterTracker++;
+                return new Filter<Thing>(_name, scope, this, false);
+            }
             var mapCollectionName = $"{scope.GetUniqueLoadID()}.{_name}";
             Toolkit.Collecting.Build(mapCollectionName, x => x.Compare.Indexed(nameof(Map))
                                                               .With.Equal(scope)
                                                               .CollectFromCollection<ICollectionBuilder, Thing>(_name)
                                     );
-            return new Filter<Thing>(mapCollectionName, scope, this);
+            return new Filter<Thing>(mapCollectionName, scope, this, true);
         }
         /// <inheritdoc/>
         IDynamicFilter<Map, ThingDef> IDynamicPolicy<Map, ThingDef>.GetFilter(Map scope)
@@ -56,7 +64,7 @@ namespace HomebrewDot.Net.Rimworld.Policies.Components
 
             // Defs are not really scoped per map so no need for extra filtering
             _filterTracker++;
-            return new Filter<ThingDef>(_name, scope, this);
+            return new Filter<ThingDef>(_name, scope, this, false);
         }
         /// <inheritdoc/>
         public void Dispose()
@@ -71,6 +79,7 @@ namespace HomebrewDot.Net.Rimworld.Policies.Components
             // Fields
             private readonly string _collectionName;
             private readonly CollectionPolicy _policy;
+            private readonly bool _isMapScoped;
 
             // State
             private ICollector<T> _collection;
@@ -82,11 +91,12 @@ namespace HomebrewDot.Net.Rimworld.Policies.Components
             /// <inheritdoc/>
             public IDynamicPolicy<Map, T> Policy => (IDynamicPolicy<Map, T>)_policy;
 
-            public Filter(string collectionName, Map scope, CollectionPolicy policy)
+            public Filter(string collectionName, Map scope, CollectionPolicy policy, bool isMapScoped)
             {
                 _collectionName = Guard.NotNullOrWhitespace(collectionName, nameof(collectionName));
                 Scope = Guard.NotNull(scope, nameof(scope));
                 _policy = Guard.NotNull(policy, nameof(policy));
+                _isMapScoped = isMapScoped;
                 if (Toolkit.Collecting.GetAllCollectors().TryGetValue(_collectionName, out var collector) && collector is ICollector<T> typedCollector)
                 {
                     _collection = typedCollector;
@@ -129,7 +139,7 @@ namespace HomebrewDot.Net.Rimworld.Policies.Components
             /// <inheritdoc/>
             public void Dispose()
             {
-                if (typeof(ThingDef) == typeof(T))
+                if (!_isMapScoped || typeof(ThingDef) == typeof(T))
                 {
                     _policy._filterTracker--;
                 }

@@ -50,6 +50,7 @@ namespace HomebrewDot.Net.Rimworld
         private static bool _storageFilteringEnabled;
         private static bool _policiesLoadedFromSettings;
         private static bool _presetsActivated;
+        private static bool _specialThingFilterPresetsActivated;
 
         /// <summary>
         /// The unique identifier for this mod.
@@ -144,6 +145,14 @@ namespace HomebrewDot.Net.Rimworld
                     DisableStorageFiltering();
                 }
                 SetPresets(e.Settings.EnablePresets);
+
+                // The special thing filter presets are normally created by ActivatePresets; when the setting is
+                // enabled while presets are already active, create them right away.
+                if (e.Settings.EnableSpecialThingFilterPresets && _presetsActivated && !_specialThingFilterPresetsActivated)
+                {
+                    _specialThingFilterPresetsActivated = true;
+                    DynamicFilterPresets.CreateSpecialThingFilterPresets();
+                }
             }, priority: byte.MaxValue);
          
             Toolkit.Hooks.Manager.RegisterHook<OnGameLoadedTrigger>(Instance, e =>
@@ -178,6 +187,7 @@ namespace HomebrewDot.Net.Rimworld
             Indexing.ThingFilter.EnsureTable();
             StoragePolicyMapPatcher.ApplyPatches();
             BetterWorkbenchManagementSupport.ApplyPatches();
+            StorageSettingsClipboardPatcher.ApplyPatches();
             Templates.AddTemplate(BlocksWindmillPolicy.Instance);
             Templates.AddTemplate(SimpleFilterPolicy.Instance);
             Templates.AddTemplate(ComplexFilterPolicy.Instance);
@@ -200,6 +210,7 @@ namespace HomebrewDot.Net.Rimworld
             Log("Disabling storage filtering...");
             StoragePolicyMapPatcher.RemovePatches();
             BetterWorkbenchManagementSupport.RemovePatches();
+            StorageSettingsClipboardPatcher.RemovePatches();
         }
 
         private static void SetPresets(bool enable)
@@ -558,6 +569,12 @@ namespace HomebrewDot.Net.Rimworld
             /// </summary>
             public bool EnablePresets = false;
             /// <summary>
+            /// Enables readonly presets that mirror every loaded special thing filter (the stockpile "Allow ..."
+            /// checkboxes, including filters added by other mods). Only takes effect when <see cref="EnablePresets"/>
+            /// is also enabled.
+            /// </summary>
+            public bool EnableSpecialThingFilterPresets = false;
+            /// <summary>
             /// Shows a Policies button in the bottom toolbar that opens the mod settings with the Policies tab selected.
             /// </summary>
             public bool ShowPoliciesButton = false;
@@ -572,6 +589,7 @@ namespace HomebrewDot.Net.Rimworld
                 base.ExposeData();
                 Scribe_Collections.Look(ref ActiveTemplates, nameof(ActiveTemplates), LookMode.Deep);
                 Scribe_Values.Look(ref EnablePresets, nameof(EnablePresets), defaultValue: false);
+                Scribe_Values.Look(ref EnableSpecialThingFilterPresets, nameof(EnableSpecialThingFilterPresets), defaultValue: false);
                 Scribe_Values.Look(ref EnableStorageFiltering, nameof(EnableStorageFiltering), defaultValue: true);
                 Scribe_Values.Look(ref ShowPoliciesButton, nameof(ShowPoliciesButton), defaultValue: false);
 

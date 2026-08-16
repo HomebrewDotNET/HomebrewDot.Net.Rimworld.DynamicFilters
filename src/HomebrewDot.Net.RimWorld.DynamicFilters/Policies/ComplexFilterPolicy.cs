@@ -13,6 +13,7 @@ using HomebrewDot.Net.Rimworld.Extensions;
 using HomebrewDot.Net.Rimworld.Filtering;
 using HomebrewDot.Net.Rimworld.Indexing;
 using HomebrewDot.Net.Rimworld.Policies.Components;
+using HomebrewDot.Net.Rimworld.Policies.Templates;
 using HomebrewDot.Net.Rimworld.Referencing.Components;
 using HomebrewDot.Net.Rimworld.State;
 using HomebrewDot.Net.Rimworld.UI.Components;
@@ -125,7 +126,7 @@ namespace HomebrewDot.Net.Rimworld.Policies
             {
                 yield return "Collection name cannot be empty.";
             }
-            else if (!Toolkit.Collecting.GetAllCollectors().ContainsKey(collection.Name))
+            else if (!Toolkit.Collecting.GetAllDefinitions().ContainsKey(collection.Name))
             {
                 yield return $"Unknown collection: {collection.Name}. No collection registered with this name.";
             }
@@ -157,6 +158,20 @@ namespace HomebrewDot.Net.Rimworld.Policies
             var thingDefRect = new Rect(rect.x, cursorY, rect.width, 24f);
             Widgets.CheckboxLabeled(thingDefRect, "ForThingDef", ref typedSettings.ThingDef);
             cursorY = thingDefRect.yMax + 8f;
+
+            if (!typedSettings.ThingDef)
+            {
+                var lazyEvaluationRect = new Rect(rect.x, cursorY, rect.width, 24f);
+                Widgets.CheckboxLabeled(lazyEvaluationRect, "Lazy Evaluation", ref typedSettings.LazyEvaluation);
+                cursorY = lazyEvaluationRect.yMax + 8f;
+
+                if (!typedSettings.LazyEvaluation)
+                {
+                    var requireMapContextRect = new Rect(rect.x, cursorY, rect.width, 24f);
+                    Widgets.CheckboxLabeled(requireMapContextRect, "Require Map Context", ref typedSettings.RequireMapContext);
+                    cursorY = requireMapContextRect.yMax + 8f;
+                }
+            }
 
             // Edit button
             var editConfigRect = new Rect(rect.x, cursorY, 200f, BottomButtonsHeight);
@@ -236,24 +251,44 @@ namespace HomebrewDot.Net.Rimworld.Policies
                     Toolkit.Indexing.Thing.EnsureTable();
                 }
 
-                Toolkit.Collecting.Build(name, x =>
-                {
-                    x.FromDef(_settings.Collection);
-                    return _settings.ThingDef ? 
-                        x.CollectFromSnapshot(d => d.GetTable<ThingDef>(Toolkit.Indexing.Def.Thing.FullTableName), d => d.GetTable<ThingDef>(Toolkit.Indexing.Def.Thing.FullTableName).GetSnapshot(), false) : 
-                        x.CollectFromSnapshot(d => d.GetTable<Thing>(Toolkit.Indexing.Thing.TableName), d => d.GetTable<Thing>(Toolkit.Indexing.Thing.TableName).GetSnapshot());
-                });
+                var isLazy = !_settings.ThingDef && _settings.LazyEvaluation;
 
+                // The label, title, and description are set for every mode (including lazy evaluation) so the
+                // policy always displays its template identity instead of the provider type name.
                 context.WithLabel("Complex Filter")
+                       .WithTitle(_parent.GetTitle())
                        .WithDescription(_parent.GetLongDescription(_settings));
 
-                if (_settings.ThingDef)
+                if (!isLazy)
                 {
-                    context.AvailableFor<Map, ThingDef>(new CollectionPolicy(name));
+                    Toolkit.Collecting.Build(name, x =>
+                    {
+                        x.FromDef(_settings.Collection);
+                        return _settings.ThingDef ? 
+                            x.CollectFromSnapshot(d => d.GetTable<ThingDef>(Toolkit.Indexing.Def.Thing.FullTableName), d => d.GetTable<ThingDef>(Toolkit.Indexing.Def.Thing.FullTableName).GetSnapshot(), false) : 
+                            x.CollectFromSnapshot(d => d.GetTable<Thing>(Toolkit.Indexing.Thing.TableName), d => d.GetTable<Thing>(Toolkit.Indexing.Thing.TableName).GetSnapshot());
+                    });
+
+                    if (_settings.ThingDef)
+                    {
+                        context.AvailableFor<Map, ThingDef>(new CollectionPolicy(name, false));
+                    }
+                    else
+                    {
+                        context.AvailableFor<Map, Thing>(new CollectionPolicy(name, _settings.RequireMapContext));
+                    }
                 }
                 else
                 {
-                    context.AvailableFor<Map, Thing>(new CollectionPolicy(name));
+
+                    var collection = Toolkit.Collecting.Build(name, x =>
+                    {
+                        x.FromDef(_settings.Collection);
+                        return x;
+                    });
+                    var collections = Toolkit.Collecting.GetAllDefinitions();
+                    var comparer = Toolkit.Collecting.Comparator;
+                    context.AvailableFor<Map, Thing>(new LazyCollectionPolicy(name, collection, comparer, collections, (Toolkit.Indexing.Manager.Database as IDatabase)?.AsTyped<Thing>()));
                 }
             }
             /// <inheritdoc/>
@@ -265,15 +300,10 @@ namespace HomebrewDot.Net.Rimworld.Policies
     /// <summary>
     /// Contains the settings for the <see cref="ComplexFilterPolicy"/>. This includes the conditions, inclusions, and exclusions that define the filter behavior.
     /// </summary>
-    public class ComplexFilterPolicySettings : IExposable
+    public class ComplexFilterPolicySettings : BaseCollectionFilterPolicySettings, IExposable
     {
         // Fields
         private CollectionDef _staticDef;
-        /// <summary>
-        /// Filter applies to <see cref="Verse.ThingDef"/>s. Default is true.
-        /// When false it applies to <see cref="Verse.Thing"/>.
-        /// </summary>
-        public bool ThingDef = true;
         /// <summary>
         /// The config backing the complex filter policy.
         /// </summary>
@@ -299,9 +329,9 @@ namespace HomebrewDot.Net.Rimworld.Policies
         }
 
         /// <inheritdoc/>
-        public void ExposeData()
+        public override void ExposeData()
         {
-            Scribe_Values.Look(ref ThingDef, "ThingDef", true);
+            base.ExposeData();
             Scribe_Deep.Look(ref Config, "Config");
             Config ??= new CollectionDefConfig();
 

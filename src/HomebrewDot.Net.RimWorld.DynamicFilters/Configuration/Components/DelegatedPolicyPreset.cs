@@ -24,6 +24,12 @@ namespace HomebrewDot.Net.Rimworld.Configuration.Components
         private readonly T _policy;
         private readonly IExposable _settings;
 
+        // Properties
+        /// <summary>
+        /// Determines the default prefix shown in the UI.
+        /// </summary>
+        public string Kind { get; set; } = "Preset";
+
         /// <inheritdoc cref="DelegatedPolicyPreset{T}"/>
         /// <param name="name">The name of the preset</param>
         /// <param name="description">The description of the preset</param>
@@ -37,7 +43,7 @@ namespace HomebrewDot.Net.Rimworld.Configuration.Components
             _description = Guard.NotNullOrWhitespace(description, nameof(description));
         }
         /// <inheritdoc/>
-        public override string StorageKey => $"{_policy.StorageKey}::Preset::{_name}";
+        public override string StorageKey => $"{_policy.StorageKey}::{Kind}::{_name}";
         /// <inheritdoc/>
         public override IDynamicPolicyProvider Create() => _policy.Create(_settings);
         /// <inheritdoc/>
@@ -45,6 +51,6 @@ namespace HomebrewDot.Net.Rimworld.Configuration.Components
         /// <inheritdoc/>
         public override string GetShortDescription() => _description;
         /// <inheritdoc/>
-        public override string GetTitle() => $"[Preset] {_name}";
+        public override string GetTitle() => $"[{Kind}] {_name}";
     }
 }

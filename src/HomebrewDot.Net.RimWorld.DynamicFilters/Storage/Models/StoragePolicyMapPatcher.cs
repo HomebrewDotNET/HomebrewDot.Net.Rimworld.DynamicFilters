@@ -80,14 +80,14 @@ namespace HomebrewDot.Net.Rimworld.Storage.Models
                 return true;
             }
 
-            bool anyFilterActive = policyManager.TryGetActiveFilters(__instance, out var activeFilter, out var activeFilterInverted, out var activeDefFilter, out var activeDefFilterInverted);
-            if(!anyFilterActive)
+            bool anyFilterActive = policyManager.TryGetActiveFilters(__instance, out var activeFilter, out var activeFilterInverted, out _, out _);
+            if(!anyFilterActive || activeFilter is null)
             {
                 return true;
             }
 
+            __result = true;
             bool thingResult = true;
-            bool defResult = true;
             if (activeFilter != null)
             {
                 thingResult = activeFilter.Filter(t);
@@ -95,22 +95,9 @@ namespace HomebrewDot.Net.Rimworld.Storage.Models
                 {
                     thingResult = !thingResult;
                 }
-                if(!thingResult)
-                {
-                    __result = false;
-                    return false;
-                }
-            }
-            if (activeDefFilter != null)
-            {
-                defResult = activeDefFilter.Filter(t.def);
-                if (activeDefFilterInverted)
-                {
-                    defResult = !defResult;
-                }
+                __result = thingResult;
             }
 
-            __result = thingResult && defResult;
             return __result;
         }
 

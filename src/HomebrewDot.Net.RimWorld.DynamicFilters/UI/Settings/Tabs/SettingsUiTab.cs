@@ -35,6 +35,18 @@ namespace HomebrewDot.Net.Rimworld.UI.Settings.Tabs
                 ref enablePresets,
                 "Enables policy presets with common use cases.");
             DynamicFiltersToolkit.Settings.EnablePresets = enablePresets;
+
+            // Only offered while presets are enabled: special thing filter presets are part of the preset catalog.
+            if (DynamicFiltersToolkit.Settings.EnablePresets)
+            {
+                var enableSpecialThingFilterPresets = DynamicFiltersToolkit.Settings.EnableSpecialThingFilterPresets;
+                listing.CheckboxLabeled(
+                    "Enable special thing filter presets",
+                    ref enableSpecialThingFilterPresets,
+                    "Adds a read-only preset for every special thing filter the game loads — the stockpile \"Allow ...\" checkboxes such as allow fresh, allow rotten, allow smeltable, allow clean apparel, or allow colonist corpses — including filters added by other mods. Each preset uses the exact same check as the game's own filter. Built-in presets that duplicate a special thing filter (for example the Rotting preset, which allow rotten covers) are skipped in favour of the special thing filter preset. Activating a preset registers a collection, so the Complex Filter Policy can include or exclude it. Takes effect immediately.");
+                DynamicFiltersToolkit.Settings.EnableSpecialThingFilterPresets = enableSpecialThingFilterPresets;
+            }
+
             var showPoliciesButton = DynamicFiltersToolkit.Settings.ShowPoliciesButton;
             listing.CheckboxLabeled(
                 "Show Policies button in toolbar",

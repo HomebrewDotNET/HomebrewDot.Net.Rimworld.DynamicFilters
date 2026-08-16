@@ -120,6 +120,80 @@ namespace HomebrewDot.Net.RimWorld.DynamicFilters.Tests.Policies
         }
 
         [Fact]
+        public void Copy_WithConfigBackedCondition_CopiesAllConfigFields()
+        {
+            // Arrange
+            var condition = SimpleFilterPolicyCondition.FromConfig(new ConditionDefConfig
+            {
+                CompareDefault = "def.label",
+                Operator = EqualsOperatorType.DefaultTypeName,
+                IsOr = true,
+                Inverted = true,
+            });
+
+            // Act
+            var copy = condition.Copy();
+
+            // Assert
+            Assert.False(copy.IsStatic);
+            Assert.NotSame(condition.Config, copy.Config);
+            Assert.Equal("def.label", copy.Config.CompareDefault);
+            Assert.Equal(EqualsOperatorType.DefaultTypeName, copy.Config.Operator);
+            Assert.True(copy.Config.IsOr);
+            Assert.True(copy.Config.Inverted);
+        }
+
+        [Fact]
+        public void Copy_WithConfigBackedCondition_ModifyingCopyDoesNotAffectOriginal()
+        {
+            // Arrange
+            var condition = SimpleFilterPolicyCondition.FromConfig(new ConditionDefConfig
+            {
+                CompareDefault = "def.label",
+                Operator = EqualsOperatorType.DefaultTypeName,
+            });
+
+            // Act
+            var copy = condition.Copy();
+            copy.Config.CompareDefault = "other.label";
+            copy.IsOr = true;
+
+            // Assert
+            Assert.Equal("def.label", condition.Config.CompareDefault);
+            Assert.False(condition.IsOr);
+        }
+
+        [Fact]
+        public void Copy_WithStaticCondition_KeepsStaticBackingDef()
+        {
+            // Arrange
+            var def = new ConditionDef { Compare = "self", With = "Equals", To = "hello" };
+            var condition = SimpleFilterPolicyCondition.FromDef(def);
+
+            // Act
+            var copy = condition.Copy();
+
+            // Assert
+            Assert.True(copy.IsStatic);
+            Assert.Same(def, copy.Condition);
+        }
+
+        [Fact]
+        public void Copy_WithStaticCondition_ModifyingCopyDoesNotAffectOriginal()
+        {
+            // Arrange
+            var def = new ConditionDef { Compare = "self", With = "Equals", To = "hello" };
+            var condition = SimpleFilterPolicyCondition.FromDef(def);
+
+            // Act
+            var copy = condition.Copy();
+            copy.IsOr = true;
+
+            // Assert
+            Assert.False(condition.IsOr);
+        }
+
+        [Fact]
         public void Create_WithWrongType_Throws()
         {
             // Arrange

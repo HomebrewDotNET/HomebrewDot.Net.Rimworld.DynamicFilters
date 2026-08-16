@@ -372,6 +372,7 @@ namespace HomebrewDot.Net.Rimworld.Filtering.Components
                     SnapshotManager?.Destroyed(thingFilter, ref metadata, false);
                 }
                 BetterWorkbenchManagementSupport.DestroyProductAdditionalFilter(bill, __instance.billGiver.Map);
+                BetterWorkbenchManagementSupport.RemoveClonedBill(bill);
             }
             /// <summary>
             /// Pushes the <see cref="ThingFilter"/> data to the snapshot manager when a <see cref="Bill"/> is added to a <see cref="BillStack"/>.
@@ -391,6 +392,7 @@ namespace HomebrewDot.Net.Rimworld.Filtering.Components
                     SnapshotManager?.Push(thingFilter, ref metadata, false);
                 }
                 BetterWorkbenchManagementSupport.PushProductAdditionalFilter(bill, __instance.billGiver.Map);
+                BetterWorkbenchManagementSupport.TransferClonedBillPolicies(bill, __instance.billGiver.Map);
             }
             /// <summary>
             /// Pushes the <see cref="ThingFilter"/> data to the snapshot manager when a <see cref="Building_Storage"/> has its settings changed.

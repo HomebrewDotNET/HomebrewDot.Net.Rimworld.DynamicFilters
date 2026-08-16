@@ -12,6 +12,8 @@ using HomebrewDot.Net.Rimworld.Configuration;
 using HomebrewDot.Net.Rimworld.Configuration.Components;
 using HomebrewDot.Net.Rimworld.Filtering;
 using HomebrewDot.Net.Rimworld.Policies;
+using HomebrewDot.Net.Rimworld.Policies.Templates;
+using HomebrewDot.Net.Rimworld.Referencing;
 using HomebrewDot.Net.Rimworld.Referencing.Components;
 using RimWorld;
 using Verse;
@@ -25,6 +27,38 @@ namespace HomebrewDot.Net.Rimworld
     public static class DynamicFilterPresets
     {
         private static Action<Action<string, string, IDynamicPolicyTemplate, IExposable>> Presets = (activator) => { };
+
+        /// <summary>
+        /// Whether the special thing filter presets have been created in this session. Prevents duplicates when
+        /// preset activation runs more than once (e.g. toggling settings within the same session).
+        /// </summary>
+        private static bool _specialThingFilterPresetsActivated;
+
+        /// <summary>
+        /// The preset kind used for the special thing filter presets, which is also the UI prefix.
+        /// </summary>
+        public const string SpecialThingFilterPresetKind = "ThingFilter";
+
+        /// <summary>
+        /// DefNames of special thing filters that duplicate a built-in condition preset. While special thing filter
+        /// presets are enabled, the special thing filter preset wins and the built-in preset is skipped.
+        /// </summary>
+        private static readonly HashSet<string> DuplicateSpecialThingFilterDefNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            // Duplicates RottingPreset (thing comp CompRottable.Stage in {Rotting, Dessicated}).
+            "AllowRotten",
+            // Duplicates ColonistCorpsePreset / StrangerCorpsePreset / SlaveCorpsePreset / UnnaturalCorpsePreset.
+            "AllowCorpsesColonist",
+            "AllowCorpsesStranger",
+            "AllowCorpsesSlave",
+            "AllowCorpsesUnnatural",
+            // Duplicates SmeltablePreset (mirrors Thing.Smeltable, i.e. the vanilla Allow Smeltable check).
+            "AllowSmeltable",
+            "AllowSmeltableApparel",
+            // Duplicates BiocodedPreset (comp CompBiocodable.Biocoded == true).
+            "AllowBiocodedWeapons",
+            "AllowBiocodedApparel",
+        };
 
         /// <summary>
         /// Policy name for the preset that contains all resource items.
@@ -99,6 +133,10 @@ namespace HomebrewDot.Net.Rimworld
         /// </summary>
         public const string IsRangedWeaponPreset = "Ranged Weapons";
         /// <summary>
+        /// Policy name for the preset that contains all equipment (weapons, apparel, tools, shields, etc.).
+        /// </summary>
+        public const string EquipmentPreset = "Equipment";
+        /// <summary>
         /// Policy name for the preset that contains all flammable items.
         /// </summary>
         public const string FlammablePreset = "Flammable";
@@ -122,6 +160,18 @@ namespace HomebrewDot.Net.Rimworld
         /// Policy name for the preset that contains all mechanoid corpses.
         /// </summary>
         public const string MechanoidCorpsePreset = "Mechanoid Corpses";
+        /// <summary>
+        /// Policy name for the preset that contains all colonist corpses.
+        /// </summary>
+        public const string ColonistCorpsePreset = "Colonist Corpses";
+        /// <summary>
+        /// Policy name for the preset that contains all stranger corpses.
+        /// </summary>
+        public const string StrangerCorpsePreset = "Stranger Corpses";
+        /// <summary>
+        /// Policy name for the preset that contains all pet corpses (tame colony animals).
+        /// </summary>
+        public const string PetCorpsePreset = "Pet Corpses";
         /// <summary>
         /// Policy name for the preset that contains all foul meat.
         /// </summary>
@@ -178,6 +228,18 @@ namespace HomebrewDot.Net.Rimworld
         /// Policy name for the preset that contains all items with no quality.
         /// </summary>
         public const string NoQualityPreset = "No Quality";
+        /// <summary>
+        /// Policy name for the preset that contains all things with quality below Normal (Awful and Poor).
+        /// </summary>
+        public const string LowQualityPreset = "Low Quality";
+        /// <summary>
+        /// Policy name for the preset that contains all tattered apparel and weapons (hit points at 25% or less).
+        /// </summary>
+        public const string TatteredPreset = "Tattered";
+        /// <summary>
+        /// Policy name for the preset that contains all worn-out apparel and weapons (hit points at 50% or less).
+        /// </summary>
+        public const string WornOutPreset = "Worn Out";
         /// <summary>
         /// Policy name for the preset that contains all things whose tech level is above the tech level of the faction that owns the map.
         /// </summary>
@@ -251,6 +313,9 @@ namespace HomebrewDot.Net.Rimworld
             CreateSimple(IsWeaponPreset, "Filters all defs that are weapons", CreatePropertyCondition(Toolkit.Helpers.Expression.GetMember<ThingDef, bool>(x => x.IsWeapon).Name, EqualsOperatorType.DefaultTypeName, true), true);
             CreateSimple(IsMeleeWeaponPreset, "Filters all defs that are melee weapons", CreatePropertyCondition(Toolkit.Helpers.Expression.GetMember<ThingDef, bool>(x => x.IsMeleeWeapon).Name, EqualsOperatorType.DefaultTypeName, true), true);
             CreateSimple(IsRangedWeaponPreset, "Filters all defs that are ranged weapons", CreatePropertyCondition(Toolkit.Helpers.Expression.GetMember<ThingDef, bool>(x => x.IsRangedWeapon).Name, EqualsOperatorType.DefaultTypeName, true), true);
+            CreateSimple(EquipmentPreset, "Filters all things that can be equipped (weapons, apparel, tools, shields, etc.)",
+                CreateEquipmentCondition(),
+                true);
             Toolkit.Indexing.Def.Thing.TrackIsConstructionMaterial();
             CreateSimple(ConstructionPreset, "Filters all defs that are currently usable to build stuff. Updated when research is completed", CreatePropertyCondition(ToolkitConstants.Def.Thing.IsConstructionMaterial.Name, EqualsOperatorType.DefaultTypeName, true), true);
             CreateSimple(ExplosivesPreset, "Filters all defs that could explode when hit", CreateExplosiveCondition(), true);
@@ -316,6 +381,18 @@ namespace HomebrewDot.Net.Rimworld
                            .With.True()
                 ).Conditions.Select(x => SimpleFilterPolicyCondition.FromDef(x)).ToArray(),
                 true);
+            Toolkit.Indexing.Thing.TrackCorpseKind();
+            // Lazy evaluation: corpse-kind metadata is resolved per-call from the live database, so a fresh corpse is
+            // filtered immediately instead of waiting for the next snapshot cycle.
+            if (!IsReplacedBySpecialThingFilterPreset("AllowCorpsesColonist"))
+            {
+                CreateSimple(ColonistCorpsePreset, "Filters all colonist corpses", CreateColonistCorpseCondition(), false, isLazy: true);
+            }
+            if (!IsReplacedBySpecialThingFilterPreset("AllowCorpsesStranger"))
+            {
+                CreateSimple(StrangerCorpsePreset, "Filters all stranger corpses", CreateStrangerCorpseCondition(), false, isLazy: true);
+            }
+            CreateSimple(PetCorpsePreset, "Filters all pet corpses (tame colony animals)", CreatePetCorpseCondition(), false, isLazy: true);
             Toolkit.Indexing.Def.Thing.TrackIsFoul();
             CreateSimple(FoulMeatPreset, "Filters all foul meat (human, insect, twisted, etc.)",
                 BuildConditions(builder =>
@@ -332,6 +409,15 @@ namespace HomebrewDot.Net.Rimworld
                         _ = foulMeat.Or
                                    .Compare.Self()
                                    .With.InThingCategory(ToolkitConstants.Mods.BadMeatCategory.MeatBadCategoryDefName);
+                    }
+                    // Davai's Sorted Categories does the same job as Bad Meat Category: it moves foul meat
+                    // (human, insect, twisted, toxic, etc.) out of MeatRaw into its Nasty meat category, so
+                    // IsMeat becomes false for those defs. Include that category as well to keep matching them.
+                    if (ToolkitConstants.Mods.DavaiSortedCategories.IsLoaded)
+                    {
+                        _ = foulMeat.Or
+                                   .Compare.Self()
+                                   .With.InThingCategory(ToolkitConstants.Mods.DavaiSortedCategories.NastyMeatCategoryDefName);
                     }
                 }),
                 true);
@@ -405,41 +491,246 @@ namespace HomebrewDot.Net.Rimworld
                            .With.NotNull()
                 ),
                 true);
-            CreateSimple(RottingPreset, "Filters all things that are currently rotting",
-                BuildConditions(builder =>
-                    builder.Compare.Comp($"{typeof(CompRottable).FullName}{CompReferenceType.PathSeparator}{nameof(CompRottable.Stage)}")
-                           .With.Equal()
-                           .To.Value(RotStage.Rotting)
-                ),
-                false);
-            CreateSimple(SmeltablePreset, "Filters all things that can be smelted at a smelter (matches vanilla Allow Smeltable)",
-                CreateSmeltableCondition(),
-                false);
+            if (!IsReplacedBySpecialThingFilterPreset("AllowRotten"))
+            {
+                CreateSimple(RottingPreset, "Filters all things that are rotting or fully decomposed (e.g. skeletons)",
+                    CreateRottingCondition(),
+                    false);
+            }
+            if (!IsReplacedBySpecialThingFilterPreset("AllowSmeltable"))
+            {
+                CreateSimple(SmeltablePreset, "Filters all things that can be smelted at a smelter (matches vanilla Allow Smeltable)",
+                    CreateSmeltableCondition(),
+                    false, isLazy: false);
+            }
             CreateSimple(DeterioratesPreset, "Filters all items that deteriorate when left outside",
                 CreateStatCondition(StatDefOf.DeteriorationRate, GreaterOperatorType.DefaultTypeName, 0),
                 true);
-            CreateSimple(BiocodedPreset, "Filters all biocoded items (bound to a specific pawn)",
-                BuildConditions(builder =>
-                    builder.Compare.Comp($"{typeof(CompBiocodable).FullName}{CompReferenceType.PathSeparator}{nameof(CompBiocodable.Biocoded)}")
-                           .With.True()
-                ),
-                false);
+            if (!IsReplacedBySpecialThingFilterPreset("AllowBiocodedWeapons"))
+            {
+                CreateSimple(BiocodedPreset, "Filters all biocoded items (bound to a specific pawn)",
+                    BuildConditions(builder =>
+                        builder.Compare.Comp($"{typeof(CompBiocodable).FullName}{CompReferenceType.PathSeparator}{nameof(CompBiocodable.Biocoded)}")
+                               .With.True()
+                    ),
+                    false);
+            }
             CreateSimple(NoQualityPreset, "Filters all items with no quality (raw resources, components, etc.)",
                 BuildConditions(builder =>
                     builder.Compare.Comp(typeof(CompQuality))
                            .With.Null()
                 ),
-                false);
+                false, isLazy: false);
+            CreateSimple(LowQualityPreset, "Filters all things whose quality is below Normal (Awful and Poor)",
+                CreateLowQualityCondition(),
+                false, isLazy: false);
+            // HitPointPercentage metadata is required by the damaged equipment presets. Track it here so the presets
+            // work even when storage filtering (which also tracks it) is disabled; registering the same indexer
+            // twice is a no-op.
+            Toolkit.Indexing.Thing.TrackHitPointPercentage();
+            CreateSimple(TatteredPreset, "Filters all apparel and weapons that are tattered (hit points at 25% or less)",
+                CreateWornEquipmentCondition(20f),
+                false, isLazy: false);
+            CreateSimple(WornOutPreset, "Filters all apparel and weapons that are worn out (hit points at 50% or less)",
+                CreateWornEquipmentCondition(50f),
+                false, isLazy: false);
             CreateSimple(AboveTechLevelPreset, "Filters all things whose tech level is above the tech level of the faction that owns the map",
                 CreateTechLevelCondition(GreaterOperatorType.DefaultTypeName),
-                false);
+                false, isLazy: false);
             CreateSimple(BelowTechLevelPreset, "Filters all things whose tech level is below the tech level of the faction that owns the map",
                 CreateTechLevelCondition(LesserOperatorType.DefaultTypeName),
-                false);
+                false, isLazy: false);
             Presets((name, description, template, settings) =>
             {
                 CreatePreset(name, description, template, settings);
             });
+
+            // Special thing filter presets are a separate opt-in so players can keep the smaller preset list.
+            if (DynamicFiltersToolkit.Settings.EnableSpecialThingFilterPresets)
+            {
+                CreateSpecialThingFilterPresets();
+            }
+        }
+
+        /// <summary>
+        /// Returns whether the special thing filter with the given defName duplicates a built-in condition preset
+        /// while special thing filter presets are enabled, in which case the built-in preset is skipped and the
+        /// special thing filter preset takes its place.
+        /// </summary>
+        /// <param name="defName">The defName of the <see cref="SpecialThingFilterDef"/>.</param>
+        /// <returns><c>true</c> when the built-in preset should be skipped; otherwise, <c>false</c>.</returns>
+        public static bool IsReplacedBySpecialThingFilterPreset(string defName)
+        {
+            if (!DynamicFiltersToolkit.Settings.EnableSpecialThingFilterPresets)
+            {
+                return false;
+            }
+            if (!IsDuplicateSpecialThingFilter(defName))
+            {
+                return false;
+            }
+            return DefDatabase<SpecialThingFilterDef>.GetNamedSilentFail(defName) != null;
+        }
+
+        /// <summary>
+        /// Creates the condition that mirrors a single special thing filter: the thing itself (Self) checked
+        /// against the given special thing filter def via the MatchesThingFilter operator, which delegates to the
+        /// def's worker — the exact check the vanilla stockpile UI performs.
+        /// </summary>
+        /// <param name="defName">The defName of the <see cref="SpecialThingFilterDef"/> to check against.</param>
+        /// <returns>An array containing the single <see cref="SimpleFilterPolicyCondition"/>.</returns>
+        public static SimpleFilterPolicyCondition[] CreateSpecialThingFilterCondition(string defName)
+        {
+            defName = Guard.NotNullOrWhitespace(defName, nameof(defName));
+
+            var conditionDef = ConditionBuilder.Build(builder =>
+                builder.Compare.Self()
+                       .With.MatchesThingFilter()
+                       .To.SpecialThingFilter(defName));
+
+            return new[] { SimpleFilterPolicyCondition.FromDef(conditionDef) };
+        }
+
+        /// <summary>
+        /// Returns whether a special thing filter def duplicates one of the built-in condition presets. While
+        /// special thing filter presets are enabled, the special thing filter preset wins and the built-in preset
+        /// is skipped (see <see cref="IsReplacedBySpecialThingFilterPreset(string)"/>).
+        /// </summary>
+        /// <param name="defName">The defName of the <see cref="SpecialThingFilterDef"/>.</param>
+        /// <returns><c>true</c> when a built-in preset duplicates this special thing filter; otherwise, <c>false</c>.</returns>
+        public static bool IsDuplicateSpecialThingFilter(string defName)
+        {
+            return defName != null && DuplicateSpecialThingFilterDefNames.Contains(defName);
+        }
+
+        /// <summary>
+        /// Creates read-only presets that mirror every loaded special thing filter (vanilla, expansions, and modded).
+        /// Each preset is a thing-level SimpleFilterPolicy with a single condition — <c>Self MatchesThingFilter
+        /// [SpecialThingFilterDef]</c> — that delegates to the def's worker, so each preset matches exactly what the
+        /// corresponding stockpile checkbox matches. When a preset is activated, the Simple Filter Policy registers
+        /// its own collection, so complex filter policies can include or exclude it like any other policy. Defs
+        /// without a worker class (a config error) are skipped and logged; built-in presets that duplicate a special
+        /// thing filter yield to it (see <see cref="IsReplacedBySpecialThingFilterPreset(string)"/>). Calling this
+        /// method more than once per session is a no-op.
+        /// </summary>
+        public static void CreateSpecialThingFilterPresets()
+        {
+            if (_specialThingFilterPresetsActivated)
+            {
+                return;
+            }
+            _specialThingFilterPresetsActivated = true;
+
+            var usedTitles = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var def in DefDatabase<SpecialThingFilterDef>.AllDefs)
+            {
+                CreateSpecialThingFilterPreset(def, usedTitles);
+            }
+        }
+
+        /// <summary>
+        /// Registers a single special thing filter def as a read-only preset backed by the def's worker. Duplicate
+        /// labels (e.g. "allow smeltable" under both Apparel and Weapons) are disambiguated with the parent
+        /// category in the title.
+        /// </summary>
+        /// <param name="def">The special thing filter def to mirror. Can be null.</param>
+        /// <param name="usedTitles">Titles already in use by other special thing filter presets, used to disambiguate duplicate labels. When null, a new set is created.</param>
+        public static void CreateSpecialThingFilterPreset(SpecialThingFilterDef def, ISet<string> usedTitles = null)
+        {
+            if (def == null)
+            {
+                return;
+            }
+            if (def.workerClass == null)
+            {
+                Logging.Log($"Skipping special thing filter preset '{def.defName}': no worker class defined.");
+                return;
+            }
+
+            usedTitles ??= new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+            var condition = CreateSpecialThingFilterCondition(def.defName);
+            var title = GetSpecialThingFilterPresetTitle(def, usedTitles);
+            CreateSimple(title, BuildSpecialThingFilterPresetDescription(def), condition, false, isLazy: true, presetKind: SpecialThingFilterPresetKind);
+        }
+
+        /// <summary>
+        /// Builds the user-facing description from the def's own description (when present) and falls back to a
+        /// generated sentence that names the filter. Adds the parent category for context, so filters whose labels
+        /// only make sense inside their stockpile category (e.g. "smeltable" under Apparel vs Weapons) stay
+        /// understandable as standalone presets.
+        /// </summary>
+        /// <param name="def">The special thing filter def to describe. Must not be null.</param>
+        /// <returns>The description shown in the templates UI.</returns>
+        private static string BuildSpecialThingFilterPresetDescription(SpecialThingFilterDef def)
+        {
+            var label = string.IsNullOrWhiteSpace(def.label) ? def.defName : def.label;
+            var description = string.IsNullOrWhiteSpace(def.description)
+                ? $"Mirrors the \"{label}\" special thing filter."
+                : def.description;
+
+            var category = def.parentCategory;
+            if (category != null && !string.Equals(category.defName, "Root", StringComparison.Ordinal))
+            {
+                var categoryLabel = string.IsNullOrWhiteSpace(category.label) ? category.defName : category.label;
+                description += $" Applies to the {categoryLabel} category.";
+            }
+            return description;
+        }
+
+        /// <summary>
+        /// Derives the preset title from the def's label (title-cased), falling back to the defName when the label
+        /// is missing. When the label collides with an already-registered special thing filter preset, the parent
+        /// category is appended (e.g. "Allow Smeltable (Apparel)"), and the defName is used when that still
+        /// collides.
+        /// </summary>
+        /// <param name="def">The special thing filter def to title. Must not be null.</param>
+        /// <param name="usedTitles">Titles already in use, updated with the derived title. Must not be null.</param>
+        /// <returns>The preset title without the "[Preset]" prefix.</returns>
+        private static string GetSpecialThingFilterPresetTitle(SpecialThingFilterDef def, ISet<string> usedTitles)
+        {
+            var baseTitle = string.IsNullOrWhiteSpace(def.label)
+                ? def.defName
+                : ToTitleCase(def.label);
+
+            var title = baseTitle;
+            if (usedTitles.Contains(title))
+            {
+                var category = def.parentCategory;
+                var categoryLabel = string.IsNullOrWhiteSpace(category?.label) ? category?.defName : category.label;
+                title = string.IsNullOrWhiteSpace(categoryLabel)
+                    ? $"{baseTitle} ({def.defName})"
+                    : $"{baseTitle} ({categoryLabel.CapitalizeFirst()})";
+
+                if (usedTitles.Contains(title))
+                {
+                    title = $"{baseTitle} ({def.defName})";
+                }
+            }
+
+            usedTitles.Add(title);
+            return title;
+        }
+
+        /// <summary>
+        /// Capitalizes the first letter of every whitespace-separated word, e.g. "allow colonist corpses" becomes
+        /// "Allow Colonist Corpses". Unlike <see cref="GenText.CapitalizeFirst(string)"/>, which only capitalizes
+        /// the very first character of the string.
+        /// </summary>
+        /// <param name="text">The text to title-case. Can be null or empty.</param>
+        /// <returns>The title-cased text.</returns>
+        private static string ToTitleCase(string text)
+        {
+            if (string.IsNullOrWhiteSpace(text))
+            {
+                return text;
+            }
+            var words = text.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
+            for (var i = 0; i < words.Length; i++)
+            {
+                words[i] = words[i].CapitalizeFirst();
+            }
+            return string.Join(" ", words);
         }
 
         /// <summary>
@@ -497,6 +788,102 @@ namespace HomebrewDot.Net.Rimworld
         }
 
         /// <summary>
+        /// Creates thing-level conditions for things that are currently rotting or fully decomposed.
+        /// A thing matches when its <see cref="CompRottable"/> stage is <see cref="RotStage.Rotting"/> or
+        /// <see cref="RotStage.Dessicated"/> (a fully decomposed corpse, e.g. a skeleton). Fresh things do not match.
+        /// Collections evaluate <see cref="IIndexed{T}"/> entries, so the Comp reference resolves the comp from the
+        /// indexed value's thing.
+        /// </summary>
+        /// <returns>An array of SimpleFilterPolicyCondition objects.</returns>
+        public static SimpleFilterPolicyCondition[] CreateRottingCondition()
+        {
+            return BuildConditions(builder =>
+                builder.Compare.Comp($"{typeof(CompRottable).FullName}{CompReferenceType.PathSeparator}{nameof(CompRottable.Stage)}")
+                       .With.In()
+                       .To.Value(new[] { RotStage.Rotting, RotStage.Dessicated })
+            );
+        }
+
+        /// <summary>
+        /// Creates a thing-level condition that matches corpses of ghouls (Anomaly). A thing is a ghoul corpse when
+        /// its indexed <see cref="ToolkitConstants.Thing.IsGhoulCorpse"/> metadata is true, which is only set for
+        /// <see cref="Corpse"/>s whose <see cref="Corpse.InnerPawn"/> carries the Anomaly "Ghoul" hediff. Ghouls are
+        /// transformed humans, so their corpses share the Human corpse def and cannot be identified by def alone. The
+        /// condition reads the metadata set by <see cref="Toolkit.Indexing.Thing.TrackIsGhoulCorpse"/>, so the preset
+        /// must run with lazy evaluation, resolving the metadata per-call from the live database.
+        /// </summary>
+        /// <returns>An array of SimpleFilterPolicyCondition objects.</returns>
+        public static SimpleFilterPolicyCondition[] CreateGhoulCorpseCondition()
+        {
+            return CreatePropertyCondition(ToolkitConstants.Thing.IsGhoulCorpse.Name, EqualsOperatorType.DefaultTypeName, true);
+        }
+
+        /// <summary>
+        /// Creates a thing-level condition that matches colonist corpses, mirroring the vanilla "Allow Colonist corpses"
+        /// special thing filter. A thing is a colonist corpse when its indexed <see cref="ToolkitConstants.Thing.IsColonistCorpse"/>
+        /// metadata is true, which is only set by <see cref="Toolkit.Indexing.Thing.TrackCorpseKind"/> for humanlike corpses
+        /// whose inner pawn was a free colonist. The condition reads metadata, so the preset must run with lazy
+        /// evaluation, resolving the metadata per-call from the live database.
+        /// </summary>
+        /// <returns>An array of SimpleFilterPolicyCondition objects.</returns>
+        public static SimpleFilterPolicyCondition[] CreateColonistCorpseCondition()
+        {
+            return CreatePropertyCondition(ToolkitConstants.Thing.IsColonistCorpse.Name, EqualsOperatorType.DefaultTypeName, true);
+        }
+
+        /// <summary>
+        /// Creates a thing-level condition that matches stranger corpses, mirroring the vanilla "Allow Stranger corpses"
+        /// special thing filter. A thing is a stranger corpse when its indexed <see cref="ToolkitConstants.Thing.IsStrangerCorpse"/>
+        /// metadata is true, which is only set by <see cref="Toolkit.Indexing.Thing.TrackCorpseKind"/> for humanlike corpses
+        /// whose inner pawn did not belong to the player faction. The condition reads metadata, so the preset must run with
+        /// lazy evaluation, resolving the metadata per-call from the live database.
+        /// </summary>
+        /// <returns>An array of SimpleFilterPolicyCondition objects.</returns>
+        public static SimpleFilterPolicyCondition[] CreateStrangerCorpseCondition()
+        {
+            return CreatePropertyCondition(ToolkitConstants.Thing.IsStrangerCorpse.Name, EqualsOperatorType.DefaultTypeName, true);
+        }
+
+        /// <summary>
+        /// Creates a thing-level condition that matches pet corpses (tame colony animals). A thing is a pet corpse when its
+        /// indexed <see cref="ToolkitConstants.Thing.IsPetCorpse"/> metadata is true, which is only set by
+        /// <see cref="Toolkit.Indexing.Thing.TrackCorpseKind"/> for corpses whose inner pawn was a tame animal of the player
+        /// faction (the vanilla <see cref="Pawn.IsColonyAnimal"/> concept). The condition reads metadata, so the preset runs with
+        /// lazy evaluation, resolving it per-call from the live database.
+        /// </summary>
+        /// <returns>An array of SimpleFilterPolicyCondition objects.</returns>
+        public static SimpleFilterPolicyCondition[] CreatePetCorpseCondition()
+        {
+            return CreatePropertyCondition(ToolkitConstants.Thing.IsPetCorpse.Name, EqualsOperatorType.DefaultTypeName, true);
+        }
+
+        /// <summary>
+        /// Creates a thing-level condition that matches slave corpses, mirroring the vanilla "Allow Slave corpses" special
+        /// thing filter. A thing is a slave corpse when its indexed <see cref="ToolkitConstants.Thing.IsSlaveCorpse"/> metadata
+        /// is true, which is only set by <see cref="Toolkit.Indexing.Thing.TrackCorpseKind"/> for humanlike corpses whose inner
+        /// pawn was a player-faction slave (Ideology). The condition reads metadata, so the preset must run with lazy
+        /// evaluation, resolving the metadata per-call from the live database.
+        /// </summary>
+        /// <returns>An array of SimpleFilterPolicyCondition objects.</returns>
+        public static SimpleFilterPolicyCondition[] CreateSlaveCorpseCondition()
+        {
+            return CreatePropertyCondition(ToolkitConstants.Thing.IsSlaveCorpse.Name, EqualsOperatorType.DefaultTypeName, true);
+        }
+
+        /// <summary>
+        /// Creates a thing-level condition that matches unnatural corpses (Anomaly), mirroring the vanilla "Allow Unnatural
+        /// corpses" special thing filter. A thing is an unnatural corpse when its indexed
+        /// <see cref="ToolkitConstants.Thing.IsUnnaturalCorpse"/> metadata is true, which is only set by
+        /// <see cref="Toolkit.Indexing.Thing.TrackCorpseKind"/> for <see cref="UnnaturalCorpse"/>s. The condition reads metadata,
+        /// so the preset must run with lazy evaluation, resolving the metadata per-call from the live database.
+        /// </summary>
+        /// <returns>An array of SimpleFilterPolicyCondition objects.</returns>
+        public static SimpleFilterPolicyCondition[] CreateUnnaturalCorpseCondition()
+        {
+            return CreatePropertyCondition(ToolkitConstants.Thing.IsUnnaturalCorpse.Name, EqualsOperatorType.DefaultTypeName, true);
+        }
+
+        /// <summary>
         /// Creates thing-level conditions that mirror the game's per-instance smeltability check, i.e. the same
         /// logic as <see cref="Thing.Smeltable"/> and the vanilla "Allow Smeltable" special thing filter. A thing is
         /// smeltable when its def is marked <see cref="ThingDef.smeltable"/> and, when the def is made from stuff, the
@@ -526,6 +913,77 @@ namespace HomebrewDot.Net.Rimworld
                            .Compare.Indexed(stuffSmeltable)
                            .With.True());
             });
+        }
+
+        /// <summary>
+        /// Creates def-level conditions that match anything a pawn can equip: weapons (melee and ranged, including
+        /// tool-like items such as thrumbo horns and elephant tusks), primary-slot equipment such as shields (marked
+        /// via <see cref="ThingDef.equipmentType"/>), and apparel. All three operands are def members, so the preset
+        /// must run with def-level (ThingDef) evaluation. Collections evaluate <see cref="IIndexed{T}"/> entries, so
+        /// each path segment resolves from the indexed value's def member.
+        /// </summary>
+        /// <returns>An array of SimpleFilterPolicyCondition objects.</returns>
+        public static SimpleFilterPolicyCondition[] CreateEquipmentCondition()
+        {
+            return BuildConditions(builder =>
+                builder.Compare.Indexed(nameof(ThingDef.IsWeapon))
+                       .With.True()
+                       .Or
+                       .Compare.Indexed(nameof(ThingDef.equipmentType))
+                       .With.Equal()
+                       .To.Value(EquipmentType.Primary)
+                       .Or
+                       .Compare.Indexed(nameof(ThingDef.IsApparel))
+                       .With.True()
+            );
+        }
+
+        /// <summary>
+        /// Creates thing-level conditions for things whose quality is below <see cref="QualityCategory.Normal"/>, i.e.
+        /// Awful and Poor. A guard ensures the thing has a <see cref="CompQuality"/> first, so raw resources and other
+        /// things without quality do not match. Collections evaluate <see cref="IIndexed{T}"/> entries, so the Comp
+        /// references resolve the comp from the indexed value's thing.
+        /// </summary>
+        /// <returns>An array of SimpleFilterPolicyCondition objects.</returns>
+        public static SimpleFilterPolicyCondition[] CreateLowQualityCondition()
+        {
+            return BuildConditions(builder =>
+                builder.Compare.Comp(typeof(CompQuality))
+                       .With.NotNull()
+                       .And
+                       .Compare.Comp($"{typeof(CompQuality).FullName}{CompReferenceType.PathSeparator}{nameof(CompQuality.Quality)}")
+                       .With.LessThan()
+                       .To.Value(QualityCategory.Normal)
+            );
+        }
+
+        /// <summary>
+        /// Creates thing-level conditions for apparel and weapons that are damaged, i.e. apparel and weapons whose
+        /// current hit points are at or below the given percentage of their maximum. Only defs that are apparel or
+        /// weapons can match, and only things that use hit points (which carry the indexed
+        /// <see cref="ToolkitConstants.Thing.HitPointPercentage"/> metadata) are considered, so raw resources and
+        /// other non-equipment items never match. Collections evaluate <see cref="IIndexed{T}"/> entries, so the
+        /// first path segments resolve from the indexed value's members (def) and the hit point percentage resolves
+        /// from the indexed metadata. The condition reads metadata, so the preset must run with eager (non-lazy)
+        /// evaluation where the indexed items carry that metadata.
+        /// </summary>
+        /// <param name="maxHitPointPercentage">The maximum hit point percentage (0-100) that still counts as
+        /// damaged. A thing matches when its hit points are at or below this percentage.</param>
+        /// <returns>An array of SimpleFilterPolicyCondition objects.</returns>
+        public static SimpleFilterPolicyCondition[] CreateWornEquipmentCondition(float maxHitPointPercentage)
+        {
+            return BuildConditions(builder =>
+                builder.Group(equipment => equipment
+                           .Compare.Indexed($"{nameof(Thing.def)}.{nameof(ThingDef.IsApparel)}")
+                           .With.True()
+                           .Or
+                           .Compare.Indexed($"{nameof(Thing.def)}.{nameof(ThingDef.IsWeapon)}")
+                           .With.True())
+                       .And
+                       .Compare.Indexed(ToolkitConstants.Thing.HitPointPercentage.Name)
+                       .With.LessThanOrEqual()
+                       .To.Value(maxHitPointPercentage)
+            );
         }
 
         /// <summary>
@@ -659,29 +1117,36 @@ namespace HomebrewDot.Net.Rimworld
         /// <summary>
         /// Activates a simple filter policy with the given name and conditions.
         /// </summary>
-        /// <param name="policyName">The name of the policy to activate.</param>
         /// <param name="conditions">The conditions to apply to the policy.</param>
-        /// <param name="thingDef">Whether the policy applies to ThingDefs.</param>
-        /// <param name="disallowMatching">Whether to disallow matching items.</param>
-        public static void CreateSimple(string presetName, string description, SimpleFilterPolicyCondition[] conditions, bool thingDef = true)
+        /// <param name="thingDef"><inheritdoc cref="BaseCollectionFilterPolicySettings.ThingDef"/></param>
+        /// <param name="requireMapContext"><inheritdoc cref="BaseCollectionFilterPolicySettings.RequireMapContext"/></param>
+        /// <param name="isLazy"><inheritdoc cref="BaseCollectionFilterPolicySettings.IsLazy"/></param>
+        /// <param name="presetKind"><inheritdoc cref="DelegatedPolicyPreset.Kind"/></param>
+        public static void CreateSimple(string presetName, string description, SimpleFilterPolicyCondition[] conditions, bool thingDef = true, bool requireMapContext = false, bool isLazy = true, string presetKind = "Preset")
         {
             var settings = new SimpleFilterPolicySettings()
             {
                 Conditions = conditions.ToList(),
-                ThingDef = thingDef
+                ThingDef = thingDef,
+                RequireMapContext = requireMapContext,
+                LazyEvaluation = isLazy
             };
             var template = SimpleFilterPolicy.Instance;
-            CreatePreset<SimpleFilterPolicy>(presetName, description, template, settings);
+            CreatePreset<SimpleFilterPolicy>(presetName, description, template, settings, presetKind);
         }
 
         /// <summary>
         /// Activates a preset with the given name and provider.
         /// </summary>
-        /// <param name="policyName">The name of the policy to activate.</param>
-        /// <param name="provider">The provider to use for the policy.</param>
-        public static void CreatePreset<T>(string presetName, string description, T policy, IExposable settings) where T : IDynamicPolicyTemplate
+        /// <param name="presetName">The name of the preset to activate.</param>
+        /// <param name="description">The description of the preset.</param>
+        /// <param name="policy">The policy template to use for the preset.</param>
+        /// <param name="settings">The settings for the policy</param>
+        /// <param name="presetKind"><inheritdoc cref="DelegatedPolicyPreset.Kind"/></param>
+        public static void CreatePreset<T>(string presetName, string description, T policy, IExposable settings, string presetKind = "Preset") where T : IDynamicPolicyTemplate
         {
             var preset = new DelegatedPolicyPreset<T>(presetName, description, policy, settings);
+            preset.Kind = presetKind;
             DynamicFiltersToolkit.Templates.AddTemplate(preset);
         }
     }

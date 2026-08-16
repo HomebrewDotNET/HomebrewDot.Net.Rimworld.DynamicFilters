@@ -157,6 +157,17 @@ namespace HomebrewDot.Net.Rimworld.UI.Settings.Tabs
                     : template.GetShortDescription();
                 Widgets.Label(new Rect(rowRect.x + 4f, rowRect.y + 22f, rowRect.width - 8f, 24f), descText);
 
+                // Explain the template on hover, falling back to the short description.
+                var tooltip = template.GetLongDescription(null);
+                if (string.IsNullOrWhiteSpace(tooltip))
+                {
+                    tooltip = template.GetShortDescription();
+                }
+                if (!string.IsNullOrWhiteSpace(tooltip))
+                {
+                    TooltipHandler.TipRegion(rowRect, tooltip);
+                }
+
                 if (Widgets.ButtonInvisible(rowRect))
                 {
                     if (IsEditing)

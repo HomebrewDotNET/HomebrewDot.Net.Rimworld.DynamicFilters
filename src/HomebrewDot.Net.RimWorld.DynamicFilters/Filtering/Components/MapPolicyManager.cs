@@ -39,7 +39,7 @@ namespace HomebrewDot.Net.Rimworld.Filtering.Components
         }
 
         // Fields
-                private readonly Dictionary<string, IDynamicFilter<Map, Thing>> _thingFilters = new Dictionary<string, IDynamicFilter<Map, Thing>>();
+        private readonly Dictionary<string, IDynamicFilter<Map, Thing>> _thingFilters = new Dictionary<string, IDynamicFilter<Map, Thing>>();
         private readonly Dictionary<string, IDynamicFilter<Map, ThingDef>> _defFilters = new Dictionary<string, IDynamicFilter<Map, ThingDef>>();
         private Dictionary<ThingFilter, string> _filterToThingCache = new Dictionary<ThingFilter, string>();
         private Dictionary<ThingFilter, string> _filterToDefCache = new Dictionary<ThingFilter, string>();
@@ -64,6 +64,8 @@ namespace HomebrewDot.Net.Rimworld.Filtering.Components
         object IHook<OnGameTickTrigger>.Owner => this;
         /// <inheritdoc/>
         bool IHook<OnGameTickTrigger>.Once => false;
+        /// <inheritdoc/>
+        public bool GameScoped => true;
 
         /// <inheritdoc cref="MapPolicyManager"/>
         /// <param name="map">The map that this component is associated with.</param>
@@ -72,7 +74,7 @@ namespace HomebrewDot.Net.Rimworld.Filtering.Components
             _instances.Remove(map);
             _instances.Add(map, this);
         }
-        
+
         /// <summary>
         /// Associates the given <see cref="ThingFilter"/> with the specified policy name, allowing it to be managed and updated according to that policy. This method checks if the policy is active on this map, and if the filter is properly indexed. If the filter is already managed by another policy, it will be unmanaged before being assigned to the new policy. Returns true if the filter is successfully managed with the policy, false otherwise.
         /// </summary>
@@ -97,7 +99,7 @@ namespace HomebrewDot.Net.Rimworld.Filtering.Components
             }
             if (table.TryFind<ThingFilter>(filter, out var indexed))
             {
-                                {
+                {
                     var storageId = indexed.GetValue<string>(DynamicFiltersToolkitConstants.ThingFilter.StorageIdKey.Name);
                     if (string.IsNullOrWhiteSpace(storageId))
                     {
@@ -155,7 +157,7 @@ namespace HomebrewDot.Net.Rimworld.Filtering.Components
                             else
                             {
                                 Log($"Filter {filter} is already managed by def policy {existingPolicy}, unmanaging it before assigning to policy {policyName}");
-                                Unmanage(filter,isForThing);
+                                Unmanage(filter, isForThing);
                             }
                         }
                         _storageToDefFilterMap[storageId] = policyName;
@@ -164,7 +166,7 @@ namespace HomebrewDot.Net.Rimworld.Filtering.Components
                     }
 
                     _filterCache.Clear();
-                    if(!isForThing)
+                    if (!isForThing)
                         MaintainActivePolicies(true);
 
                     return true;
@@ -194,7 +196,7 @@ namespace HomebrewDot.Net.Rimworld.Filtering.Components
             }
             if (table.TryFind<ThingFilter>(filter, out var indexed))
             {
-                                {
+                {
                     var storageId = indexed.GetValue<string>(DynamicFiltersToolkitConstants.ThingFilter.StorageIdKey.Name);
                     if (!string.IsNullOrWhiteSpace(storageId))
                     {
@@ -203,14 +205,16 @@ namespace HomebrewDot.Net.Rimworld.Filtering.Components
                             if (_storageToThingFilterMap.TryGetValue(storageId, out var policyName))
                             {
                                 _storageToThingFilterMap.Remove(storageId);
+                                _storageToInvertedThingFilterMap.Remove(storageId);
                                 Log($"Filter {filter} is no longer managed by thing policy {policyName}");
                             }
                         }
                         else
                         {
-                            if(_storageToDefFilterMap.TryGetValue(storageId, out var policyName))
+                            if (_storageToDefFilterMap.TryGetValue(storageId, out var policyName))
                             {
                                 _storageToDefFilterMap.Remove(storageId);
+                                _storageToInvertedDefFilterMap.Remove(storageId);
                                 Log($"Filter {filter} is no longer managed by def policy {policyName}");
                             }
                         }
@@ -236,7 +240,7 @@ namespace HomebrewDot.Net.Rimworld.Filtering.Components
         {
             thingFilter = Guard.NotNull(thingFilter, nameof(thingFilter));
 
-            if(_thingFilters.Count == 0 && _defFilters.Count == 0)
+            if (_thingFilters.Count == 0 && _defFilters.Count == 0)
             {
                 if (IsVerboseEnabled) LogVerbose($"No active policies for map {map}, cannot manage any filters");
                 return false;
@@ -263,7 +267,7 @@ namespace HomebrewDot.Net.Rimworld.Filtering.Components
         /// <returns>The active policy names.</returns>
         public IReadOnlyCollection<string> GetActiveDefPolicyNames()
         {
-                        {
+            {
                 return _defFilters.Keys;
             }
         }
@@ -273,7 +277,7 @@ namespace HomebrewDot.Net.Rimworld.Filtering.Components
         /// <returns>The active policy names.</returns>
         public IReadOnlyCollection<string> GetActiveThingPolicyNames()
         {
-                        {
+            {
                 return _thingFilters.Keys;
             }
         }
@@ -316,7 +320,7 @@ namespace HomebrewDot.Net.Rimworld.Filtering.Components
                     {
                         if (_storageToThingFilterMap.TryGetValue(storageId, out var mappedPolicyName))
                         {
-                                                        {
+                            {
                                 _filterToThingCache[filter] = mappedPolicyName;
                             }
                             policyName = mappedPolicyName;
@@ -325,9 +329,9 @@ namespace HomebrewDot.Net.Rimworld.Filtering.Components
                     }
                     else
                     {
-                        if(_storageToDefFilterMap.TryGetValue(storageId, out var mappedPolicyName))
+                        if (_storageToDefFilterMap.TryGetValue(storageId, out var mappedPolicyName))
                         {
-                                                        {
+                            {
                                 _filterToDefCache[filter] = mappedPolicyName;
                             }
                             policyName = mappedPolicyName;
@@ -341,12 +345,70 @@ namespace HomebrewDot.Net.Rimworld.Filtering.Components
         }
 
         /// <summary>
+        /// Gets the policy name and inversion state currently bound to the given storage ID for the specified
+        /// filter kind. Reads the persisted storage maps directly, so it does not depend on a live filter
+        /// instance or the instance caches.
+        /// </summary>
+        /// <param name="storageId">The storage ID to look up.</param>
+        /// <param name="isForThing">Whether to look up a thing policy instead of a def policy.</param>
+        /// <param name="policyName">The managing policy name when found.</param>
+        /// <param name="inverted">Whether the managing policy is applied inverted.</param>
+        /// <returns>True when a managing policy exists for the storage ID; otherwise false.</returns>
+        internal bool TryGetPolicyForStorage(string storageId, bool isForThing, out string policyName, out bool inverted)
+        {
+            policyName = null;
+            inverted = false;
+            if (string.IsNullOrWhiteSpace(storageId))
+            {
+                return false;
+            }
+            if (isForThing)
+            {
+                if (!_storageToThingFilterMap.TryGetValue(storageId, out policyName))
+                {
+                    return false;
+                }
+                inverted = _storageToInvertedThingFilterMap.ContainsKey(storageId);
+                return true;
+            }
+            if (!_storageToDefFilterMap.TryGetValue(storageId, out policyName))
+            {
+                return false;
+            }
+            inverted = _storageToInvertedDefFilterMap.ContainsKey(storageId);
+            return true;
+        }
+
+        /// <summary>
+        /// Transfers the policy bound to <paramref name="sourceStorageId"/> onto
+        /// <paramref name="destinationFilter"/>, whose storage ID is <paramref name="destinationStorageId"/>.
+        /// Overwrites whatever policy the destination currently has; when the source has no policy of the given
+        /// kind, the destination's is removed. Mirrors how a manually linked storage group shares one uniform
+        /// policy across its members.
+        /// </summary>
+        /// <param name="sourceStorageId">The storage ID to copy the policy from.</param>
+        /// <param name="destinationStorageId">The storage ID the policy is applied to.</param>
+        /// <param name="destinationFilter">The filter the policy is applied to.</param>
+        /// <param name="isForThing">Whether to transfer a thing policy instead of a def policy.</param>
+        /// <returns>True when the policy was applied (or the source had none); false when the policy could not be applied, for example because it is not active on this map.</returns>
+        internal bool TransferPolicy(string sourceStorageId, string destinationStorageId, ThingFilter destinationFilter, bool isForThing)
+        {
+            destinationFilter = Guard.NotNull(destinationFilter, nameof(destinationFilter));
+            if (TryGetPolicyForStorage(sourceStorageId, isForThing, out var policyName, out var inverted))
+            {
+                return ManageWith(destinationFilter, policyName, isForThing, inverted);
+            }
+            Unmanage(destinationFilter, isForThing);
+            return true;
+        }
+
+        /// <summary>
         /// Gets all active <see cref="IDynamicFilter{Map, Thing}"/> instances that are currently active on this map. This method returns a list of filters that are associated with active policies, which can be used by other components or systems to apply the filtering logic defined by those policies.
         /// </summary>
         /// <returns>A list of active <see cref="IDynamicFilter{Map, Thing}"/> instances.</returns>
         public IEnumerable<IDynamicFilter<Map, Thing>> GetActiveThingFilters()
         {
-                        {
+            {
                 return _thingFilters.Values.ToList();
             }
         }
@@ -356,7 +418,7 @@ namespace HomebrewDot.Net.Rimworld.Filtering.Components
         /// <returns>A list of active <see cref="IDynamicFilter{Map, ThingDef}"/> instances.</returns>
         public IEnumerable<IDynamicFilter<Map, ThingDef>> GetActiveDefFilters()
         {
-                        {
+            {
                 return _defFilters.Values.ToList();
             }
         }
@@ -369,7 +431,7 @@ namespace HomebrewDot.Net.Rimworld.Filtering.Components
         /// <returns>True if a filter is found; otherwise, false.</returns>
         public bool TryGetDefFilter(string policyName, out IDynamicFilter<Map, ThingDef> filter)
         {
-                        {
+            {
                 return _defFilters.TryGetValue(policyName, out filter);
             }
         }
@@ -381,7 +443,7 @@ namespace HomebrewDot.Net.Rimworld.Filtering.Components
         /// <returns>True if a filter is found; otherwise, false.</returns>
         public bool TryGetThingFilter(string policyName, out IDynamicFilter<Map, Thing> filter)
         {
-                        {
+            {
                 return _thingFilters.TryGetValue(policyName, out filter);
             }
         }
@@ -394,7 +456,7 @@ namespace HomebrewDot.Net.Rimworld.Filtering.Components
         public bool TryGetActiveDefFilter(ThingFilter filter, out IDynamicFilter<Map, ThingDef> activeFilter)
         {
             activeFilter = null;
-            if(_filterCache.TryGetValue(filter, out var cachedFilter))
+            if (_filterCache.TryGetValue(filter, out var cachedFilter))
             {
                 activeFilter = cachedFilter.Def;
                 return activeFilter != null;
@@ -406,7 +468,7 @@ namespace HomebrewDot.Net.Rimworld.Filtering.Components
                 var storageId = indexed.GetValue<string>(DynamicFiltersToolkitConstants.ThingFilter.StorageIdKey.Name);
                 if (!string.IsNullOrWhiteSpace(storageId) && _storageToDefFilterMap.TryGetValue(storageId, out var policyName))
                 {
-                                        {
+                    {
                         _filterToDefCache[filter] = policyName;
                     }
                     return TryGetDefFilter(policyName, out activeFilter);
@@ -423,7 +485,7 @@ namespace HomebrewDot.Net.Rimworld.Filtering.Components
         public bool TryGetActiveThingFilter(ThingFilter filter, out IDynamicFilter<Map, Thing> activeFilter)
         {
             activeFilter = null;
-            if(_filterCache.TryGetValue(filter, out var cachedFilter))
+            if (_filterCache.TryGetValue(filter, out var cachedFilter))
             {
                 activeFilter = cachedFilter.Thing;
                 return activeFilter != null;
@@ -435,7 +497,7 @@ namespace HomebrewDot.Net.Rimworld.Filtering.Components
                 var storageId = indexed.GetValue<string>(DynamicFiltersToolkitConstants.ThingFilter.StorageIdKey.Name);
                 if (!string.IsNullOrWhiteSpace(storageId) && _storageToThingFilterMap.TryGetValue(storageId, out var policyName))
                 {
-                                        {
+                    {
                         _filterToThingCache[filter] = policyName;
                     }
                     return TryGetThingFilter(policyName, out activeFilter);
@@ -485,56 +547,105 @@ namespace HomebrewDot.Net.Rimworld.Filtering.Components
         private void MaintainActivePolicies(bool force = false)
         {
             ThingFilter[] activeFilters;
-                        {
+            {
                 activeFilters = _filterToDefCache.Keys.ToArray();
             }
 
             var table = DynamicFiltersToolkit.Indexing.ThingFilter.GetCurrentTable();
-            if(table == null)
+            if (table == null)
             {
                 LogWarning($"ThingFilter table is not available while maintaining active policies for map {map}, skipping maintenance");
                 return;
             }
             if (IsVerboseEnabled) LogVerbose($"Maintaining active policies for map {map}, currently managing {activeFilters.Length} filters");
-            List<ThingDef> allDefs = null;
-            foreach (var filter in activeFilters)
+
+            var bindings = new List<(ThingFilter Filter, string StorageId)>(activeFilters.Length);
+            for (int i = 0; i < activeFilters.Length; i++)
             {
-                if(!table.TryFind<ThingFilter>(filter, out var indexed))
+                var filter = activeFilters[i];
+                if (!table.TryFind<ThingFilter>(filter, out var indexed))
                 {
-                                        {
+                    {
                         Log($"Filter {filter} is no longer indexed, removing from cache and policy management for map {map}");
                         _filterToDefCache.Remove(filter);
                         _filterCache.Remove(filter);
                     }
                     continue;
                 }
-                var storageId = indexed.GetValue<string>(DynamicFiltersToolkitConstants.ThingFilter.StorageIdKey.Name);
+                bindings.Add((filter, indexed.GetValue<string>(DynamicFiltersToolkitConstants.ThingFilter.StorageIdKey.Name)));
+            }
 
-                if (_filterToDefCache.TryGetValue(filter, out var policyName) && _defFilters.TryGetValue(policyName, out var defFilter))
+            ApplyDefPolicyUpdates(bindings, DefDatabase<ThingDef>.AllDefsListForReading, force);
+        }
+
+        /// <summary>
+        /// Applies the def allow-list of every managed def policy binding to its <see cref="ThingFilter"/>.
+        /// The allowed-def set of a policy is evaluated once per <c>(policyName, inverted)</c> combination per
+        /// pass (not once per storage), and applied to each storage without per-iteration allocations. Only
+        /// bindings whose policy reported an update (or all bindings when <paramref name="force"/> is true) are
+        /// rebuilt, so repeated passes with no policy change are no-ops.
+        /// </summary>
+        /// <param name="bindings">The managed filters together with their resolved storage ids.</param>
+        /// <param name="allDefs">The def universe to evaluate the policies against.</param>
+        /// <param name="force">When true, rebuilds every binding regardless of the policy version check.</param>
+        internal void ApplyDefPolicyUpdates(IReadOnlyList<(ThingFilter Filter, string StorageId)> bindings, IReadOnlyList<ThingDef> allDefs, bool force)
+        {
+            if (bindings is null || allDefs is null)
+            {
+                return;
+            }
+            Dictionary<(string PolicyName, bool Inverted), HashSet<ThingDef>> allowedDefsCache = null;
+            foreach (var (filter, storageId) in bindings)
+            {
+                if (!_filterToDefCache.TryGetValue(filter, out var policyName) || !_defFilters.TryGetValue(policyName, out var defFilter))
                 {
-                    var wasUpdated = Invoking.Safe(() => defFilter.Update(StateStore.GetChildStore(map)), false);
+                    continue;
+                }
+                var wasUpdated = Invoking.Safe(() => defFilter.Update(StateStore.GetChildStore(map)), false);
+                if (!wasUpdated && !force)
+                {
+                    continue;
+                }
 
-                    if (wasUpdated || force)
+                var inverted = _storageToInvertedDefFilterMap.ContainsKey(storageId);
+                allowedDefsCache ??= new Dictionary<(string, bool), HashSet<ThingDef>>();
+                if (!allowedDefsCache.TryGetValue((policyName, inverted), out var allowedDefs))
+                {
+                    allowedDefs = new HashSet<ThingDef>();
+                    for (int i = 0; i < allDefs.Count; i++)
                     {
-                        var inverted = _storageToInvertedDefFilterMap.ContainsKey(storageId);
-                        allDefs ??= DefDatabase<ThingDef>.AllDefsListForReading;
-                        if (IsVerboseEnabled) LogVerbose($"Updating def allow list of size {allDefs.Count} using policy {policyName} on map {map} for filter {filter}");
-                        var stopwatch = System.Diagnostics.Stopwatch.StartNew();
-                        for (int i = 0; i < allDefs.Count; i++)
+                        var def = allDefs[i];
+                        if (defFilter.Filter(def))
                         {
-                            var def = allDefs[i];
-                            var isAllowed = defFilter.Filter(def);
-                            if (inverted)
-                            {
-                                isAllowed = !isAllowed;
-                            }
-                            Invoking.Safe(() => filter.SetAllow(def, isAllowed));
+                            allowedDefs.Add(def);
                         }
-                        stopwatch.Stop();
-                        if (IsPerformanceEnabled) LogPerformance($"Finished updating def allow list of size {allDefs.Count} for filter {filter} using policy {policyName} in {stopwatch.Elapsed.TotalMilliseconds}ms");
                     }
+                    allowedDefsCache[(policyName, inverted)] = allowedDefs;
+                }
+
+                ApplyDefAllowList(filter, policyName, allDefs, allowedDefs, inverted);
+            }
+        }
+
+        private void ApplyDefAllowList(ThingFilter filter, string policyName, IReadOnlyList<ThingDef> allDefs, HashSet<ThingDef> allowedDefs, bool inverted)
+        {
+            if (IsVerboseEnabled) LogVerbose($"Updating def allow list of size {allDefs.Count} using policy {policyName} on map {map} for filter {filter}");
+            var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+            try
+            {
+                for (int i = 0; i < allDefs.Count; i++)
+                {
+                    var def = allDefs[i];
+                    var isAllowed = inverted ? !allowedDefs.Contains(def) : allowedDefs.Contains(def);
+                    filter.SetAllow(def, isAllowed);
                 }
             }
+            catch (Exception ex)
+            {
+                LogError($"Failed to apply policy {policyName} allow list to filter {filter}: {ex}");
+            }
+            stopwatch.Stop();
+            if (IsPerformanceEnabled) LogPerformance($"Finished updating def allow list of size {allDefs.Count} for filter {filter} using policy {policyName} in {stopwatch.Elapsed.TotalMilliseconds}ms");
         }
 
         /// <inheritdoc/>
@@ -604,7 +715,7 @@ namespace HomebrewDot.Net.Rimworld.Filtering.Components
             var tickerType = useLongTick ? TickerType.Long : TickerType.Rare;
             if (arg.TickerType == tickerType)
             {
-                                {
+                {
                     foreach (var filter in _thingFilters.Values)
                     {
                         Invoking.Safe(() => filter.Update(StateStore.GetChildStore(map)));
@@ -620,7 +731,7 @@ namespace HomebrewDot.Net.Rimworld.Filtering.Components
         {
             policyName = Guard.NotNullOrWhitespace(policyName, nameof(policyName));
             _filterCache.Clear();
-                        {
+            {
                 var thingPolicy = Toolkit.Services.Get<IDynamicPolicy<Map, Thing>>(policyName);
                 if (thingPolicy != null)
                 {
@@ -641,7 +752,10 @@ namespace HomebrewDot.Net.Rimworld.Filtering.Components
                         Log($"Activated policy filter {policyName} for map {map}");
                     });
                 }
-                MaintainActivePolicies(true);
+                // No forced synchronous allow-list rebuild here: the freshly created filters start with
+                // _lastCollectionVersion = -1 while the backing collector is already populated, so the first
+                // per-tick OnGameTickTrigger pass applies the allow-lists exactly once when it detects the
+                // version change. This keeps the Save click off the O(storages x defs) SetAllow loop.
             }
         }
 
@@ -649,7 +763,7 @@ namespace HomebrewDot.Net.Rimworld.Filtering.Components
         {
             policyName = Guard.NotNullOrWhitespace(policyName, nameof(policyName));
             _filterCache.Clear();
-                        {
+            {
                 if (_thingFilters.TryGetValue(policyName, out var filter))
                 {
                     _thingFilters.Remove(policyName);
@@ -670,7 +784,7 @@ namespace HomebrewDot.Net.Rimworld.Filtering.Components
                 }
             }
         }
-        
+
         /// <inheritdoc/>
         public override void ExposeData()
         {

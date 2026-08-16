@@ -11,6 +11,7 @@ using HomebrewDot.Net.Rimworld.Extensions;
 using HomebrewDot.Net.Rimworld.Filtering;
 using HomebrewDot.Net.Rimworld.Indexing;
 using HomebrewDot.Net.Rimworld.Policies.Components;
+using HomebrewDot.Net.Rimworld.Policies.Templates;
 using HomebrewDot.Net.Rimworld.Referencing;
 using HomebrewDot.Net.Rimworld.Referencing.Components;
 using HomebrewDot.Net.Rimworld.Referencing.Models;
@@ -28,8 +29,6 @@ namespace HomebrewDot.Net.Rimworld.Policies
     /// </summary>
     public class SimpleFilterPolicy : IDynamicPolicyTemplate
     {
-        private const float RowHeight = 28f;
-        private const float RowGap = 4f;
         private const float BottomButtonsHeight = 34f;
 
         private Vector2 _conditionScroll = Vector2.zero;
@@ -126,6 +125,20 @@ namespace HomebrewDot.Net.Rimworld.Policies
             Widgets.CheckboxLabeled(thingDefRect, "ForThingDef", ref typedSettings.ThingDef);
             cursorY = thingDefRect.yMax + 6f;
 
+            if (!typedSettings.ThingDef)
+            {
+                var lazyEvaluationRect = new Rect(rect.x, cursorY, rect.width, 24f);
+                Widgets.CheckboxLabeled(lazyEvaluationRect, "Lazy Evaluation", ref typedSettings.LazyEvaluation);
+                cursorY = lazyEvaluationRect.yMax + 6f;
+
+                if (!typedSettings.LazyEvaluation)
+                {
+                    var requireMapContextRect = new Rect(rect.x, cursorY, rect.width, 24f);
+                    Widgets.CheckboxLabeled(requireMapContextRect, "Require Map Context", ref typedSettings.RequireMapContext);
+                    cursorY = requireMapContextRect.yMax + 6f;
+                }
+            }
+
             var listLabelRect = new Rect(rect.x, cursorY, rect.width, 22f);
             Widgets.Label(listLabelRect, "Conditions");
             cursorY = listLabelRect.yMax + 4f;
@@ -139,9 +152,9 @@ namespace HomebrewDot.Net.Rimworld.Policies
             DrawConditionsList(listOutRect.ContractedBy(6f), typedSettings);
 
             var addRect = new Rect(rect.x, listOutRect.yMax + 6f, 170f, BottomButtonsHeight);
-            DrawActionButton(addRect, "Add Condition", () =>
+            RuleListUi.DrawActionButton(addRect, "Add Condition", () =>
             {
-                Find.WindowStack.Add(new ConditionDefEditorWindow(null, config =>
+                EditorWindowStack.OpenNested(new ConditionDefEditorWindow(null, config =>
                 {
                     typedSettings.Conditions.Add(SimpleFilterPolicyCondition.FromConfig(config));
                 }));
@@ -151,61 +164,29 @@ namespace HomebrewDot.Net.Rimworld.Policies
         private void DrawConditionsList(Rect outRect, SimpleFilterPolicySettings settings)
         {
             var conditions = settings.Conditions ?? (settings.Conditions = new List<SimpleFilterPolicyCondition>());
-            var viewHeight = Mathf.Max(outRect.height, conditions.Count * (RowHeight + RowGap) + 4f);
-            var viewRect = new Rect(0f, 0f, outRect.width - 16f, viewHeight);
 
-            Widgets.BeginScrollView(outRect, ref _conditionScroll, viewRect);
-
-            if (conditions.Count == 0)
-            {
-                Widgets.Label(new Rect(0f, 0f, viewRect.width, 22f), "- No conditions defined");
-                Widgets.EndScrollView();
-                return;
-            }
-
-            var y = 0f;
-            for (var i = 0; i < conditions.Count; i++)
-            {
-                var condition = conditions[i];
-                var rowRect = new Rect(0f, y, viewRect.width, RowHeight);
-                var editRect = new Rect(rowRect.xMax - 92f, rowRect.y, 28f, RowHeight);
-                var deleteRect = new Rect(rowRect.xMax - 60f, rowRect.y, 28f, RowHeight);
-                var logicRect = new Rect(rowRect.xMax - 150f, rowRect.y, 54f, RowHeight);
-                var textWidth = rowRect.width - (i < conditions.Count - 1 ? 154f : 94f) - 8f;
-                var textRect = new Rect(rowRect.x + 4f, rowRect.y + 4f, textWidth, RowHeight - 8f);
-
-                if (Mouse.IsOver(rowRect))
+            RuleListUi.Draw(
+                outRect,
+                ref _conditionScroll,
+                conditions,
+                "- No conditions defined",
+                BuildConditionSummary,
+                editIndex =>
                 {
-                    Widgets.DrawHighlight(rowRect);
-                }
-
-                Widgets.DrawMenuSection(rowRect);
-                Widgets.Label(textRect, BuildConditionSummary(condition));
-
-                if (i < conditions.Count - 1)
-                {
-                    var logicLabel = condition.IsOr ? "OR" : "AND";
-                    DrawActionButton(logicRect, logicLabel, () => condition.IsOr = !condition.IsOr);
-                }
-
-                DrawActionButton(editRect, "E", () =>
-                {
-                    var editIndex = i;
-                    var editingConfig = conditions[editIndex].Config;
-                    Find.WindowStack.Add(new ConditionDefEditorWindow(
+                    var editingCondition = conditions[editIndex];
+                    var editingConfig = editingCondition.IsStatic
+                        ? ConditionDefConfig.FromConditionDef(editingCondition.Condition)
+                        : editingCondition.Config;
+                    EditorWindowStack.OpenNested(new ConditionDefEditorWindow(
                         editingConfig,
-                        config => { }));
-                });
-
-                DrawActionButton(deleteRect, "X", () =>
-                {
-                    conditions.RemoveAt(i);
-                });
-
-                y += RowHeight + RowGap;
-            }
-
-            Widgets.EndScrollView();
+                        config =>
+                        {
+                            conditions[editIndex] = SimpleFilterPolicyCondition.FromConfig(config);
+                        }));
+                },
+                condition => condition.Copy(),
+                condition => condition.IsOr,
+                (condition, isOr) => condition.IsOr = isOr);
         }
 
         private static string BuildConditionSummary(SimpleFilterPolicyCondition condition)
@@ -215,20 +196,9 @@ namespace HomebrewDot.Net.Rimworld.Policies
                 return "(null condition)";
             }
 
-            return condition.Condition.ToString();
+            return condition.Condition?.ToCompactString() ?? "(null condition)";
         }
 
-        private static void DrawActionButton(Rect rect, string label, Action onClick)
-        {
-            Widgets.DrawMenuSection(rect);
-            if (Widgets.ButtonInvisible(rect))
-            {
-                onClick?.Invoke();
-            }
-            Text.Anchor = TextAnchor.MiddleCenter;
-            Widgets.Label(rect, label);
-            Text.Anchor = TextAnchor.UpperLeft;
-        }
         /// <inheritdoc/>
         public string GetShortDescription() => "Filter for matching thing(defs) based on specified conditions on their properties.";
         /// <inheritdoc/>
@@ -282,26 +252,48 @@ namespace HomebrewDot.Net.Rimworld.Policies
                     Toolkit.Indexing.Thing.EnsureTable();
                 }
 
-                Toolkit.Collecting.Build(name, x =>
-                {
-                    foreach (var condition in _settings.Conditions)
-                    {
-                        var def = condition.Condition;
-                        _ = x.CompareFrom(def);
-                    }
-                    return _settings.ThingDef ? x.CollectFromSnapshot(d => d.GetTable<ThingDef>(Toolkit.Indexing.Def.Thing.FullTableName), d => d.GetTable<ThingDef>(Toolkit.Indexing.Def.Thing.FullTableName).GetSnapshot(), false) : x.CollectFromSnapshot(d => d.GetTable<Thing>(Toolkit.Indexing.Thing.TableName), d => d.GetTable<Thing>(Toolkit.Indexing.Thing.TableName).GetSnapshot());
-                });
-
                 context.WithLabel("Simple Filter")
-                       .WithDescription(_parent.GetLongDescription(_settings));
+                        .WithTitle(_parent.GetTitle())
+                        .WithDescription(_parent.GetLongDescription(_settings));
 
-                if (_settings.ThingDef)
+                var isLazy = !_settings.ThingDef && _settings.LazyEvaluation;
+
+                if (!isLazy)
                 {
-                    context.AvailableFor<Map, ThingDef>(new CollectionPolicy(name));
+                    Toolkit.Collecting.Rebuild(name, x =>
+                    {
+                        foreach (var condition in _settings.Conditions)
+                        {
+                            var def = condition.Condition;
+                            _ = x.CompareFrom(def);
+                        }
+                        return _settings.ThingDef ? 
+                        x.CollectFromSnapshot(d => d.GetTable<ThingDef>(Toolkit.Indexing.Def.Thing.FullTableName), d => d.GetTable<ThingDef>(Toolkit.Indexing.Def.Thing.FullTableName).GetSnapshot(), false) : 
+                        x.CollectFromSnapshot(d => d.GetTable<Thing>(Toolkit.Indexing.Thing.TableName), d => d.GetTable<Thing>(Toolkit.Indexing.Thing.TableName).GetSnapshot());
+                    });
+                    if (_settings.ThingDef)
+                    {
+                        context.AvailableFor<Map, ThingDef>(new CollectionPolicy(name, false));
+                    }
+                    else
+                    {
+                        context.AvailableFor<Map, Thing>(new CollectionPolicy(name, _settings.RequireMapContext));
+                    }
                 }
                 else
                 {
-                    context.AvailableFor<Map, Thing>(new CollectionPolicy(name));
+                    var collection = Toolkit.Collecting.Build(name, x =>
+                    {
+                        foreach (var condition in _settings.Conditions)
+                        {
+                            var def = condition.Condition;
+                            _ = x.CompareFrom(def);
+                        }
+                        return x;
+                    });
+                    var collections = Toolkit.Collecting.GetAllDefinitions();
+                    var comparer = Toolkit.Collecting.Comparator;
+                    context.AvailableFor<Map, Thing>(new LazyCollectionPolicy(name, collection, comparer, collections, (Toolkit.Indexing.Manager.Database as IDatabase)?.AsTyped<Thing>()));
                 }
             }
             /// <inheritdoc/>
@@ -313,23 +305,17 @@ namespace HomebrewDot.Net.Rimworld.Policies
     /// <summary>
     /// Contains the settings for a <see cref="SimpleFilterPolicy"/>.
     /// </summary>
-    public class SimpleFilterPolicySettings : IExposable
+    public class SimpleFilterPolicySettings : BaseCollectionFilterPolicySettings, IExposable
     {
-        /// <summary>
-        /// Filter applies to <see cref="Verse.ThingDef"/>s. Default is true.
-        /// When false it applies to <see cref="Verse.Thing"/>.
-        /// </summary>
-        public bool ThingDef = true;
-
         /// <summary>
         /// The conditions for the filter policy. This is a list of <see cref="SimpleFilterPolicyCondition"/>s that define the conditions for the filter policy.
         /// </summary>
         public List<SimpleFilterPolicyCondition> Conditions = new List<SimpleFilterPolicyCondition>();
 
         /// <inheritdoc/>
-        public void ExposeData()
+        public override void ExposeData()
         {
-            Scribe_Values.Look(ref ThingDef, "ThingDef");
+            base.ExposeData();
             Scribe_Collections.Look(ref Conditions, "Conditions", LookMode.Deep);
         }
     }
@@ -351,6 +337,12 @@ namespace HomebrewDot.Net.Rimworld.Policies
         {
             _staticDef = Guard.NotNull(staticDef, nameof(staticDef));
         }
+
+        /// <summary>
+        /// Indicates whether this condition is backed by a static <see cref="ConditionDef"/> rather than an
+        /// editable <see cref="ConditionDefConfig"/>.
+        /// </summary>
+        public bool IsStatic => _staticDef != null;
 
         /// <summary>
         /// The configuration backing this condition.
@@ -385,6 +377,21 @@ namespace HomebrewDot.Net.Rimworld.Policies
         /// </summary>
         public static SimpleFilterPolicyCondition FromConfig(ConditionDefConfig config)
             => new SimpleFilterPolicyCondition { Config = config ?? new ConditionDefConfig() };
+
+        /// <summary>
+        /// Creates an independent copy of this condition. Static conditions keep their backing
+        /// <see cref="ConditionDef"/>; config-backed conditions copy their <see cref="ConditionDefConfig"/>.
+        /// </summary>
+        /// <returns>A new <see cref="SimpleFilterPolicyCondition"/> with the same state.</returns>
+        public SimpleFilterPolicyCondition Copy()
+        {
+            if (IsStatic)
+            {
+                return FromDef(_staticDef);
+            }
+
+            return FromConfig(Config == null ? new ConditionDefConfig() : new ConditionDefConfig(Config));
+        }
 
         /// <summary>
         /// Creates a new condition based on the supplied <see cref="ConditionDef"/>.
