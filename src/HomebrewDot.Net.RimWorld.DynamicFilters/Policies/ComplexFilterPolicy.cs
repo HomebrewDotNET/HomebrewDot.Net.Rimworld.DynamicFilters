@@ -100,6 +100,25 @@ namespace HomebrewDot.Net.Rimworld.Policies
         }
         private IEnumerable<string> ValidateCondition(ConditionDefConfig condition)
         {
+            // Group conditions validate their nested sub-conditions rather than leaf fields.
+            if (condition.IsGroup)
+            {
+                for (int i = 0; i < condition.Conditions.Count; i++)
+                {
+                    foreach (var error in ValidateCondition(condition.Conditions[i]))
+                    {
+                        yield return $"[{i}] {error}";
+                    }
+                }
+
+                // A pure group has no leaf fields. A group that also carries a leaf comparison
+                // (group + leaf) falls through so its leaf is still validated.
+                if (string.IsNullOrWhiteSpace(condition.Operator))
+                {
+                    yield break;
+                }
+            }
+
             if (string.IsNullOrWhiteSpace(condition.CompareDefault) && string.IsNullOrWhiteSpace(condition.CompareType))
             {
                 yield return "Property path cannot be empty.";
@@ -261,13 +280,13 @@ namespace HomebrewDot.Net.Rimworld.Policies
 
                 if (!isLazy)
                 {
-                    Toolkit.Collecting.Build(name, x =>
+                    Toolkit.Collecting.Rebuild(name, x =>
                     {
                         x.FromDef(_settings.Collection);
                         return _settings.ThingDef ? 
                             x.CollectFromSnapshot(d => d.GetTable<ThingDef>(Toolkit.Indexing.Def.Thing.FullTableName), d => d.GetTable<ThingDef>(Toolkit.Indexing.Def.Thing.FullTableName).GetSnapshot(), false) : 
                             x.CollectFromSnapshot(d => d.GetTable<Thing>(Toolkit.Indexing.Thing.TableName), d => d.GetTable<Thing>(Toolkit.Indexing.Thing.TableName).GetSnapshot());
-                    });
+                    }, Current.Game != null);
 
                     if (_settings.ThingDef)
                     {
@@ -281,11 +300,11 @@ namespace HomebrewDot.Net.Rimworld.Policies
                 else
                 {
 
-                    var collection = Toolkit.Collecting.Build(name, x =>
+                    var collection = Toolkit.Collecting.Rebuild(name, x =>
                     {
                         x.FromDef(_settings.Collection);
                         return x;
-                    });
+                    }, Current.Game != null);
                     var collections = Toolkit.Collecting.GetAllDefinitions();
                     var comparer = Toolkit.Collecting.Comparator;
                     context.AvailableFor<Map, Thing>(new LazyCollectionPolicy(name, collection, comparer, collections, (Toolkit.Indexing.Manager.Database as IDatabase)?.AsTyped<Thing>()));

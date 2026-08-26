@@ -197,6 +197,8 @@ namespace HomebrewDot.Net.Rimworld
             Templates.AddTemplate(BlocksWindmillPolicy.Instance);
             Templates.AddTemplate(SimpleFilterPolicy.Instance);
             Templates.AddTemplate(ComplexFilterPolicy.Instance);
+            Templates.AddTemplate(QualityPolicy.Instance);
+            Templates.AddTemplate(HitpointsPolicy.Instance);
 
             // Useful metadata
             Toolkit.Indexing.Thing.TrackHitPointPercentage();
@@ -207,7 +209,7 @@ namespace HomebrewDot.Net.Rimworld
             Toolkit.Indexing.Indexers.BuildIndexer<ThingFilter>(ToolkitConstants.Thing.Map.Name, x => x.Include<Map>(ToolkitConstants.Thing.Map, true));
             Toolkit.Indexing.Indexers.BuildIndexer<ThingFilter>(DynamicFiltersToolkitConstants.ThingFilter.StorageIdKey.Name, x => x.Include<string>(DynamicFiltersToolkitConstants.ThingFilter.StorageIdKey, true));
             Toolkit.Indexing.Indexers.BuildIndexer<ThingFilter>(DynamicFiltersToolkitConstants.ThingFilter.StorageKey.Name, x => x.Include<object>(DynamicFiltersToolkitConstants.ThingFilter.StorageKey, true));
-            Toolkit.Indexing.ReloadOrchestration();
+            if(Current.Game != null) Toolkit.Indexing.ReloadOrchestration();
         }
         private static void DisableStorageFiltering()
         {

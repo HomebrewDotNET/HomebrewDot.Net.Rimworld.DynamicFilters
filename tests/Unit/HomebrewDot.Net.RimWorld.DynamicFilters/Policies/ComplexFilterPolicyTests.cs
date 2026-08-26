@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using HomebrewDot.Net.Rimworld;
+using HomebrewDot.Net.Rimworld.Comparing.Components;
 using HomebrewDot.Net.Rimworld.Comparing.Models;
 using HomebrewDot.Net.Rimworld.Collecting.Models;
 using HomebrewDot.Net.Rimworld.Policies;
@@ -136,6 +137,35 @@ namespace HomebrewDot.Net.RimWorld.DynamicFilters.Tests.Policies
 
             Assert.NotEmpty(errors);
             Assert.Contains(errors, e => e.Contains("Unknown operator"));
+        }
+
+        [Fact]
+        public void ValidateSettings_WithPureGroupCondition_ReturnsNoErrors()
+        {
+            // Arrange
+            Toolkit.ConfigureServices();
+            var settings = new ComplexFilterPolicySettings
+            {
+                Config = new CollectionDefConfig
+                {
+                    Conditions = new List<ConditionDefConfig>
+                    {
+                        new ConditionDefConfig
+                        {
+                            Conditions = new List<ConditionDefConfig>
+                            {
+                                new ConditionDefConfig { CompareDefault = "defName", Operator = EqualsOperatorType.DefaultTypeName, ToDefault = "A" }
+                            }
+                        }
+                    }
+                }
+            };
+
+            // Act
+            var errors = ComplexFilterPolicy.Instance.ValidateSettings(settings).ToList();
+
+            // Assert
+            Assert.Empty(errors);
         }
 
         [Fact]

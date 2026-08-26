@@ -74,30 +74,56 @@ namespace HomebrewDot.Net.Rimworld.Policies
         }
         private IEnumerable<string> ValidateCondition(SimpleFilterPolicyCondition condition)
         {
-            // Group-only conditions (from _staticDef with Conditions but no With) don't need leaf validation
-            var def = condition.Condition;
-            var isGroupOnly = def != null && def.Conditions?.Length > 0 && def.With == null;
-
-            if (!isGroupOnly)
+            // Static conditions are backed by trusted ConditionDefs (built by code or loaded from XML
+            // presets). Their editable Config is empty by design, so there is nothing user-supplied to validate.
+            if (condition.IsStatic)
             {
-                if (string.IsNullOrWhiteSpace(condition.Config.CompareDefault) && string.IsNullOrWhiteSpace(condition.Config.CompareType))
+                yield break;
+            }
+
+            foreach (var error in ValidateConfigCondition(condition.Config))
+            {
+                yield return error;
+            }
+        }
+        private IEnumerable<string> ValidateConfigCondition(ConditionDefConfig config)
+        {
+            // Group conditions validate their nested sub-conditions rather than leaf fields.
+            if (config.IsGroup)
+            {
+                for (int i = 0; i < config.Conditions.Count; i++)
                 {
-                    yield return "Property path cannot be empty.";
-                }
-                else if (!string.IsNullOrWhiteSpace(condition.Config.CompareDefault) && !System.Text.RegularExpressions.Regex.IsMatch(condition.Config.CompareDefault, DynamicFiltersToolkitConstants.Policy.PropertyPathRegex))
-                {
-                    yield return $"Invalid property path: {condition.Config.CompareDefault}. Should match regex: {DynamicFiltersToolkitConstants.Policy.PropertyPathRegex}";
+                    foreach (var error in ValidateConfigCondition(config.Conditions[i]))
+                    {
+                        yield return $"[{i}] {error}";
+                    }
                 }
 
-                var operatorTypes = Toolkit.Services.GetAllNamed<IOperatorType>();
-                if (string.IsNullOrWhiteSpace(condition.Config.Operator))
+                // A pure group has no leaf fields. A group that also carries a leaf comparison
+                // (group + leaf) falls through so its leaf is still validated.
+                if (string.IsNullOrWhiteSpace(config.Operator))
                 {
-                    yield return "Operator cannot be empty.";
+                    yield break;
                 }
-                else if (!operatorTypes.ContainsKey(condition.Config.Operator))
-                {
-                    yield return $"Unknown operator: {condition.Config.Operator}. No operator type registered with this name.";
-                }
+            }
+
+            if (string.IsNullOrWhiteSpace(config.CompareDefault) && string.IsNullOrWhiteSpace(config.CompareType))
+            {
+                yield return "Property path cannot be empty.";
+            }
+            else if (!string.IsNullOrWhiteSpace(config.CompareDefault) && !System.Text.RegularExpressions.Regex.IsMatch(config.CompareDefault, DynamicFiltersToolkitConstants.Policy.PropertyPathRegex))
+            {
+                yield return $"Invalid property path: {config.CompareDefault}. Should match regex: {DynamicFiltersToolkitConstants.Policy.PropertyPathRegex}";
+            }
+
+            var operatorTypes = Toolkit.Services.GetAllNamed<IOperatorType>();
+            if (string.IsNullOrWhiteSpace(config.Operator))
+            {
+                yield return "Operator cannot be empty.";
+            }
+            else if (!operatorTypes.ContainsKey(config.Operator))
+            {
+                yield return $"Unknown operator: {config.Operator}. No operator type registered with this name.";
             }
         }
         /// <inheritdoc/>
@@ -270,7 +296,7 @@ namespace HomebrewDot.Net.Rimworld.Policies
                         return _settings.ThingDef ? 
                         x.CollectFromSnapshot(d => d.GetTable<ThingDef>(Toolkit.Indexing.Def.Thing.FullTableName), d => d.GetTable<ThingDef>(Toolkit.Indexing.Def.Thing.FullTableName).GetSnapshot(), false) : 
                         x.CollectFromSnapshot(d => d.GetTable<Thing>(Toolkit.Indexing.Thing.TableName), d => d.GetTable<Thing>(Toolkit.Indexing.Thing.TableName).GetSnapshot());
-                    });
+                    }, Current.Game != null);
                     if (_settings.ThingDef)
                     {
                         context.AvailableFor<Map, ThingDef>(new CollectionPolicy(name, false));
@@ -282,7 +308,7 @@ namespace HomebrewDot.Net.Rimworld.Policies
                 }
                 else
                 {
-                    var collection = Toolkit.Collecting.Build(name, x =>
+                    var collection = Toolkit.Collecting.Rebuild(name, x =>
                     {
                         foreach (var condition in _settings.Conditions)
                         {
@@ -290,7 +316,7 @@ namespace HomebrewDot.Net.Rimworld.Policies
                             _ = x.CompareFrom(def);
                         }
                         return x;
-                    });
+                    }, Current.Game != null);
                     var collections = Toolkit.Collecting.GetAllDefinitions();
                     var comparer = Toolkit.Collecting.Comparator;
                     context.AvailableFor<Map, Thing>(new LazyCollectionPolicy(name, collection, comparer, collections, (Toolkit.Indexing.Manager.Database as IDatabase)?.AsTyped<Thing>()));

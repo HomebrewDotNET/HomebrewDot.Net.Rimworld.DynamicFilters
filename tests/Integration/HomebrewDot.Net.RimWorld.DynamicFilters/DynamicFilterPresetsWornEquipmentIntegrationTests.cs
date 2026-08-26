@@ -7,6 +7,7 @@ using HomebrewDot.Net.Rimworld.Collecting;
 using HomebrewDot.Net.Rimworld.Collecting.Components;
 using HomebrewDot.Net.Rimworld.Filtering;
 using HomebrewDot.Net.Rimworld.Indexing.Models;
+using HomebrewDot.Net.Rimworld.Policies;
 using HomebrewDot.Net.Rimworld.Policies.Components;
 using HomebrewDot.Net.Rimworld.Referencing;
 using HomebrewDot.Net.Rimworld.Referencing.Components;
@@ -65,7 +66,8 @@ namespace HomebrewDot.Net.RimWorld.DynamicFilters.Tests.IntegrationIndexing
             var genericItem = PushWornThing(isApparel: false, isWeapon: false, hitPointPercentage: 15f);
 
             // Act: build the eager collection exactly like SimpleFilterPolicy.Provider does for non-lazy presets.
-            var conditions = DynamicFilterPresets.CreateWornEquipmentCondition(25f);
+            var settings = DynamicFilterPresets.CreateWornEquipmentCondition(25f);
+            var conditions = Assert.IsAssignableFrom<SimpleFilterPolicySettings>(HitpointsPolicy.Instance.ConvertOptions(settings)).Conditions;
             var collectionName = $"TestTattered_{Guid.NewGuid()}";
             Toolkit.Collecting.Build(collectionName, x =>
             {
@@ -99,7 +101,8 @@ namespace HomebrewDot.Net.RimWorld.DynamicFilters.Tests.IntegrationIndexing
             var healthyApparel = PushWornThing(isApparel: true, isWeapon: false, hitPointPercentage: 90f);
             var genericItem = PushWornThing(isApparel: false, isWeapon: false, hitPointPercentage: 10f);
 
-            var conditions = DynamicFilterPresets.CreateWornEquipmentCondition(50f);
+            var settings = DynamicFilterPresets.CreateWornEquipmentCondition(50f);
+            var conditions = Assert.IsAssignableFrom<SimpleFilterPolicySettings>(HitpointsPolicy.Instance.ConvertOptions(settings)).Conditions;
             var collectionName = $"TestWornOut_{Guid.NewGuid()}";
             Toolkit.Collecting.Build(collectionName, x =>
             {

@@ -120,6 +120,60 @@ namespace HomebrewDot.Net.RimWorld.DynamicFilters.Tests.Policies
         }
 
         [Fact]
+        public void ValidateSettings_WithPureGroupCondition_ReturnsNoErrors()
+        {
+            // Arrange
+            Toolkit.ConfigureServices();
+            var settings = new SimpleFilterPolicySettings
+            {
+                Conditions = new List<SimpleFilterPolicyCondition>
+                {
+                    SimpleFilterPolicyCondition.FromConfig(new ConditionDefConfig
+                    {
+                        Conditions = new List<ConditionDefConfig>
+                        {
+                            new ConditionDefConfig { CompareDefault = "defName", Operator = EqualsOperatorType.DefaultTypeName, ToDefault = "A" },
+                            new ConditionDefConfig { CompareDefault = "def.description", Operator = EqualsOperatorType.DefaultTypeName, ToDefault = "B" }
+                        }
+                    })
+                }
+            };
+
+            // Act
+            var errors = SimpleFilterPolicy.Instance.ValidateSettings(settings).ToList();
+
+            // Assert
+            Assert.Empty(errors);
+        }
+
+        [Fact]
+        public void ValidateSettings_WithGroupHavingInvalidLeaf_ReturnsError()
+        {
+            // Arrange
+            Toolkit.ConfigureServices();
+            var settings = new SimpleFilterPolicySettings
+            {
+                Conditions = new List<SimpleFilterPolicyCondition>
+                {
+                    SimpleFilterPolicyCondition.FromConfig(new ConditionDefConfig
+                    {
+                        Conditions = new List<ConditionDefConfig>
+                        {
+                            new ConditionDefConfig { CompareDefault = "invalid path with spaces", Operator = EqualsOperatorType.DefaultTypeName }
+                        }
+                    })
+                }
+            };
+
+            // Act
+            var errors = SimpleFilterPolicy.Instance.ValidateSettings(settings).ToList();
+
+            // Assert
+            Assert.NotEmpty(errors);
+            Assert.Contains(errors, e => e.Contains("Invalid property path"));
+        }
+
+        [Fact]
         public void Copy_WithConfigBackedCondition_CopiesAllConfigFields()
         {
             // Arrange

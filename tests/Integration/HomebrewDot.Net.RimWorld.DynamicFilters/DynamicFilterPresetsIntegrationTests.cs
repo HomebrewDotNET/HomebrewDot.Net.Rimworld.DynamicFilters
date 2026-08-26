@@ -50,6 +50,10 @@ namespace HomebrewDot.Net.RimWorld.DynamicFilters.Tests
                 ThingDef = true
             };
             DynamicFiltersToolkit.Policies.TryActivateProvider(policyName, SimpleFilterPolicy.Instance.Create(settings));
+            // No game is loaded in the test host, so SimpleFilterPolicy.Activate registers the collector
+            // without starting it (startCollecting = Current.Game != null). Force-start all registered
+            // collectors so they load the current snapshot and the Matches assertions have data to check.
+            Collecting.StartCollection();
             _activatedPolicies.Add(policyName);
         }
 

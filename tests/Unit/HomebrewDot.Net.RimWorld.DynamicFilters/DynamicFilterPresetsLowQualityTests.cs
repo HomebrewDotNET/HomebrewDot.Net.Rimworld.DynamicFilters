@@ -10,6 +10,8 @@ using HomebrewDot.Net.Rimworld.Comparing;
 using HomebrewDot.Net.Rimworld.Comparing.Components;
 using HomebrewDot.Net.Rimworld.Comparing.Models;
 using HomebrewDot.Net.Rimworld.Comparing.Template;
+using HomebrewDot.Net.Rimworld.Filtering;
+using HomebrewDot.Net.Rimworld.Policies;
 using HomebrewDot.Net.Rimworld.Referencing;
 using HomebrewDot.Net.Rimworld.Referencing.Components;
 using RimWorld;
@@ -20,9 +22,10 @@ using static HomebrewDot.Net.Rimworld.Toolkit;
 namespace HomebrewDot.Net.RimWorld.DynamicFilters.Tests
 {
     /// <summary>
-    /// Tests for the <see cref="DynamicFilterPresets.CreateLowQualityCondition"/> preset conditions.
-    /// Verifies both the condition structure (CompQuality.Quality less than Normal) and the actual
-    /// evaluation behaviour against real game objects, including things without a quality comp.
+    /// Tests for the <see cref="DynamicFilterPresets.CreateLowQualityCondition"/> preset settings backing the
+    /// Low Quality preset. Verifies both the settings (maximum quality below Normal) and the conditions produced
+    /// by <see cref="QualityPolicy.ConvertOptions"/> (CompQuality guard plus quality at or below Poor), and the
+    /// actual evaluation behaviour against real game objects, including things without a quality comp.
     /// </summary>
     [Trait("Category", "Unit")]
     public class DynamicFilterPresetsLowQualityTests
@@ -36,15 +39,37 @@ namespace HomebrewDot.Net.RimWorld.DynamicFilters.Tests
         }
 
         // ═══════════════════════════════════
-        // Structural tests
+        // Settings tests
         // ═══════════════════════════════════
 
         [Fact]
-        public void CreateLowQualityCondition_GuardsAgainstMissingQualityComp()
+        public void CreateLowQualityCondition_ReturnsQualityPolicySettings()
         {
-            var conditions = DynamicFilterPresets.CreateLowQualityCondition();
+            var settings = DynamicFilterPresets.CreateLowQualityCondition();
 
-            Assert.Equal(2, conditions.Length);
+            Assert.IsType<QualityPolicySettings>(settings);
+            Assert.Equal(QualityCategory.Awful, settings.MinimumQuality);
+            Assert.Equal(QualityCategory.Poor, settings.MaximumQuality);
+        }
+
+        [Fact]
+        public void CreateLowQualityCondition_SetsLazyEvaluation()
+        {
+            var settings = DynamicFilterPresets.CreateLowQualityCondition();
+
+            Assert.True(settings.LazyEvaluation);
+        }
+
+        // ═══════════════════════════════════
+        // Structural tests (converted conditions)
+        // ═══════════════════════════════════
+
+        [Fact]
+        public void ConvertOptions_GuardsAgainstMissingQualityComp()
+        {
+            var conditions = ConvertedConditions();
+
+            Assert.Equal(2, conditions.Count);
             var guard = conditions[0].Condition;
             var compare = Assert.IsAssignableFrom<IReference>(guard.Compare);
             Assert.Equal(CompReferenceType.DefaultTypeName, compare.Type);
@@ -55,34 +80,24 @@ namespace HomebrewDot.Net.RimWorld.DynamicFilters.Tests
         }
 
         [Fact]
-        public void CreateLowQualityCondition_ComparesCompQualityQuality()
+        public void ConvertOptions_ComparesCompQualityQualityWithLessThanOrEqualPoor()
         {
-            var conditions = DynamicFilterPresets.CreateLowQualityCondition();
+            var conditions = ConvertedConditions();
 
             var condition = conditions[1].Condition;
             var compare = Assert.IsAssignableFrom<IReference>(condition.Compare);
             Assert.Equal(CompReferenceType.DefaultTypeName, compare.Type);
             Assert.Equal($"{typeof(CompQuality).FullName}{CompReferenceType.PathSeparator}{nameof(CompQuality.Quality)}", compare.Value);
-            Assert.False(condition.Inverted);
-        }
-
-        [Fact]
-        public void CreateLowQualityCondition_UsesLessThanOperator_AgainstNormalQuality()
-        {
-            var conditions = DynamicFilterPresets.CreateLowQualityCondition();
-
-            var condition = conditions[1].Condition;
-            Assert.Equal(NativeOperatorType.LessThan.ToOperatorString(), condition.With as string);
+            Assert.Equal(NativeOperatorType.LessThanOrEqual.ToOperatorString(), condition.With as string);
 
             var to = Assert.IsAssignableFrom<IReference>(condition.To);
-            Assert.Equal(ValueReferenceType.DefaultTypeName, to.Type);
-            Assert.Equal(QualityCategory.Normal, to.Value);
+            Assert.Equal(QualityCategory.Poor, to.Value);
         }
 
         [Fact]
-        public void CreateLowQualityCondition_NotInvertedByDefault()
+        public void ConvertOptions_NotInvertedByDefault()
         {
-            Assert.All(DynamicFilterPresets.CreateLowQualityCondition(), c => Assert.False(c.Condition.Inverted));
+            Assert.All(ConvertedConditions(), c => Assert.False(c.Condition.Inverted));
         }
 
         // ═══════════════════════════════════
@@ -116,6 +131,12 @@ namespace HomebrewDot.Net.RimWorld.DynamicFilters.Tests
         // Helpers
         // ═══════════════════════════════════
 
+        private static List<SimpleFilterPolicyCondition> ConvertedConditions()
+        {
+            var settings = DynamicFilterPresets.CreateLowQualityCondition();
+            return Assert.IsAssignableFrom<SimpleFilterPolicySettings>(QualityPolicy.Instance.ConvertOptions(settings)).Conditions;
+        }
+
         private static (CollectionComparator SUT, CollectionDef Collection) BuildEvaluator()
         {
             var referenceTypes = Services.GetAllNamed<IReferenceType>();
@@ -123,7 +144,7 @@ namespace HomebrewDot.Net.RimWorld.DynamicFilters.Tests
             var operatorTypes = Services.GetAllNamed<IOperatorType>();
             var conditionComparator = new Comparator(referenceResolver, operatorTypes);
 
-            var conditions = DynamicFilterPresets.CreateLowQualityCondition();
+            var conditions = ConvertedConditions();
 
             // Re-add the conditions exactly like SimpleFilterPolicy.Provider does.
             var collectionBuilder = new CollectionBuilder();

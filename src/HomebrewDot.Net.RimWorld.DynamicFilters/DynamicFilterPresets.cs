@@ -521,19 +521,16 @@ namespace HomebrewDot.Net.Rimworld
                            .With.Null()
                 ),
                 false, isLazy: false);
-            CreateSimple(LowQualityPreset, "Filters all things whose quality is below Normal (Awful and Poor)",
-                CreateLowQualityCondition(),
-                false, isLazy: false);
-            // HitPointPercentage metadata is required by the damaged equipment presets. Track it here so the presets
-            // work even when storage filtering (which also tracks it) is disabled; registering the same indexer
-            // twice is a no-op.
+            CreatePreset(LowQualityPreset, "Filters all things whose quality is below Normal (Awful and Poor)",
+                QualityPolicy.Instance,
+                CreateLowQualityCondition());
             Toolkit.Indexing.Thing.TrackHitPointPercentage();
-            CreateSimple(TatteredPreset, "Filters all apparel and weapons that are tattered (hit points at 25% or less)",
-                CreateWornEquipmentCondition(20f),
-                false, isLazy: false);
-            CreateSimple(WornOutPreset, "Filters all apparel and weapons that are worn out (hit points at 50% or less)",
-                CreateWornEquipmentCondition(50f),
-                false, isLazy: false);
+            CreatePreset(TatteredPreset, "Filters all apparel and weapons that are tattered (hit points at 25% or less)",
+                HitpointsPolicy.Instance,
+                CreateWornEquipmentCondition(20f));
+            CreatePreset(WornOutPreset, "Filters all apparel and weapons that are worn out (hit points at 50% or less)",
+                HitpointsPolicy.Instance,
+                CreateWornEquipmentCondition(50f));
             CreateSimple(AboveTechLevelPreset, "Filters all things whose tech level is above the tech level of the faction that owns the map",
                 CreateTechLevelCondition(GreaterOperatorType.DefaultTypeName),
                 false, isLazy: false);
@@ -945,16 +942,12 @@ namespace HomebrewDot.Net.Rimworld
         /// references resolve the comp from the indexed value's thing.
         /// </summary>
         /// <returns>An array of SimpleFilterPolicyCondition objects.</returns>
-        public static SimpleFilterPolicyCondition[] CreateLowQualityCondition()
+        public static QualityPolicySettings CreateLowQualityCondition()
         {
-            return BuildConditions(builder =>
-                builder.Compare.Comp(typeof(CompQuality))
-                       .With.NotNull()
-                       .And
-                       .Compare.Comp($"{typeof(CompQuality).FullName}{CompReferenceType.PathSeparator}{nameof(CompQuality.Quality)}")
-                       .With.LessThan()
-                       .To.Value(QualityCategory.Normal)
-            );
+            var settings = new QualityPolicySettings();
+            settings.LazyEvaluation = true;
+            settings.MaximumQuality = QualityCategory.Poor;
+            return settings;
         }
 
         /// <summary>
@@ -970,20 +963,12 @@ namespace HomebrewDot.Net.Rimworld
         /// <param name="maxHitPointPercentage">The maximum hit point percentage (0-100) that still counts as
         /// damaged. A thing matches when its hit points are at or below this percentage.</param>
         /// <returns>An array of SimpleFilterPolicyCondition objects.</returns>
-        public static SimpleFilterPolicyCondition[] CreateWornEquipmentCondition(float maxHitPointPercentage)
+        public static HitpointsPolicySettings CreateWornEquipmentCondition(float maxHitPointPercentage)
         {
-            return BuildConditions(builder =>
-                builder.Group(equipment => equipment
-                           .Compare.Indexed($"{nameof(Thing.def)}.{nameof(ThingDef.IsApparel)}")
-                           .With.True()
-                           .Or
-                           .Compare.Indexed($"{nameof(Thing.def)}.{nameof(ThingDef.IsWeapon)}")
-                           .With.True())
-                       .And
-                       .Compare.Indexed(ToolkitConstants.Thing.HitPointPercentage.Name)
-                       .With.LessThanOrEqual()
-                       .To.Value(maxHitPointPercentage)
-            );
+            var settings = new HitpointsPolicySettings();
+            settings.LazyEvaluation = true;
+            settings.MaximumHitpoints = (int)maxHitPointPercentage;
+            return settings;
         }
 
         /// <summary>

@@ -9,7 +9,9 @@ using HomebrewDot.Net.Rimworld.Comparing;
 using HomebrewDot.Net.Rimworld.Comparing.Components;
 using HomebrewDot.Net.Rimworld.Comparing.Models;
 using HomebrewDot.Net.Rimworld.Comparing.Template;
+using HomebrewDot.Net.Rimworld.Filtering;
 using HomebrewDot.Net.Rimworld.Indexing.Models;
+using HomebrewDot.Net.Rimworld.Policies;
 using HomebrewDot.Net.Rimworld.Referencing;
 using HomebrewDot.Net.Rimworld.Referencing.Components;
 using RimWorld;
@@ -20,9 +22,10 @@ using static HomebrewDot.Net.Rimworld.Toolkit;
 namespace HomebrewDot.Net.RimWorld.DynamicFilters.Tests
 {
     /// <summary>
-    /// Tests for the <see cref="DynamicFilterPresets.CreateWornEquipmentCondition"/> preset conditions backing the
-    /// Tattered and Worn Out presets. Verifies both the condition structure (apparel or weapon, hit points at or
-    /// below a threshold via the indexed <see cref="ToolkitConstants.Thing.HitPointPercentage"/> metadata) and the
+    /// Tests for the <see cref="DynamicFilterPresets.CreateWornEquipmentCondition"/> preset settings backing the
+    /// Tattered and Worn Out presets. Verifies both the settings (maximum hit points threshold) and the conditions
+    /// produced by <see cref="HitpointsPolicy.ConvertOptions"/> (apparel or weapon, hit points at or below a
+    /// threshold via the indexed <see cref="ToolkitConstants.Thing.HitPointPercentage"/> metadata) and the
     /// actual evaluation behaviour against real game objects, including things without the metadata and things that
     /// are neither apparel nor weapons.
     /// </summary>
@@ -38,21 +41,43 @@ namespace HomebrewDot.Net.RimWorld.DynamicFilters.Tests
         }
 
         // ═══════════════════════════════════
-        // Structural tests
+        // Settings tests
         // ═══════════════════════════════════
 
         [Fact]
-        public void CreateWornEquipmentCondition_ReturnsTwoConditions()
+        public void CreateWornEquipmentCondition_ReturnsHitpointsPolicySettings()
         {
-            var conditions = DynamicFilterPresets.CreateWornEquipmentCondition(25f);
+            var settings = DynamicFilterPresets.CreateWornEquipmentCondition(25f);
 
-            Assert.Equal(2, conditions.Length);
+            Assert.IsType<HitpointsPolicySettings>(settings);
+            Assert.Equal(0, settings.MinimumHitpoints);
+            Assert.Equal(25, settings.MaximumHitpoints);
         }
 
         [Fact]
-        public void CreateWornEquipmentCondition_GroupsApparelOrWeapon()
+        public void CreateWornEquipmentCondition_SetsLazyEvaluation()
         {
-            var conditions = DynamicFilterPresets.CreateWornEquipmentCondition(25f);
+            var settings = DynamicFilterPresets.CreateWornEquipmentCondition(25f);
+
+            Assert.True(settings.LazyEvaluation);
+        }
+
+        // ═══════════════════════════════════
+        // Structural tests (converted conditions)
+        // ═══════════════════════════════════
+
+        [Fact]
+        public void ConvertOptions_ReturnsTwoConditions()
+        {
+            var conditions = ConvertedConditions(25f);
+
+            Assert.Equal(2, conditions.Count);
+        }
+
+        [Fact]
+        public void ConvertOptions_GroupsApparelOrWeapon()
+        {
+            var conditions = ConvertedConditions(25f);
 
             var group = conditions[0].Condition;
             Assert.NotNull(group.Conditions);
@@ -76,9 +101,9 @@ namespace HomebrewDot.Net.RimWorld.DynamicFilters.Tests
         }
 
         [Fact]
-        public void CreateWornEquipmentCondition_ComparesHitPointPercentageWithLessThanOrEqual()
+        public void ConvertOptions_ComparesHitPointPercentageWithLessThanOrEqual()
         {
-            var conditions = DynamicFilterPresets.CreateWornEquipmentCondition(25f);
+            var conditions = ConvertedConditions(25f);
 
             var condition = conditions[1].Condition;
             var compare = Assert.IsAssignableFrom<IReference>(condition.Compare);
@@ -92,18 +117,18 @@ namespace HomebrewDot.Net.RimWorld.DynamicFilters.Tests
         }
 
         [Fact]
-        public void CreateWornEquipmentCondition_UsesProvidedThreshold()
+        public void ConvertOptions_UsesProvidedThreshold()
         {
-            var conditions = DynamicFilterPresets.CreateWornEquipmentCondition(50f);
+            var conditions = ConvertedConditions(50f);
 
             var to = Assert.IsAssignableFrom<IReference>(conditions[1].Condition.To);
             Assert.Equal(50f, to.Value);
         }
 
         [Fact]
-        public void CreateWornEquipmentCondition_NotInvertedByDefault()
+        public void ConvertOptions_NotInvertedByDefault()
         {
-            Assert.All(DynamicFilterPresets.CreateWornEquipmentCondition(25f), c => Assert.False(c.Condition.Inverted));
+            Assert.All(ConvertedConditions(25f), c => Assert.False(c.Condition.Inverted));
         }
 
         // ═══════════════════════════════════
@@ -170,6 +195,12 @@ namespace HomebrewDot.Net.RimWorld.DynamicFilters.Tests
         // Helpers
         // ═══════════════════════════════════
 
+        private static List<SimpleFilterPolicyCondition> ConvertedConditions(float maxHitPointPercentage)
+        {
+            var settings = DynamicFilterPresets.CreateWornEquipmentCondition(maxHitPointPercentage);
+            return Assert.IsAssignableFrom<SimpleFilterPolicySettings>(HitpointsPolicy.Instance.ConvertOptions(settings)).Conditions;
+        }
+
         private static (CollectionComparator SUT, CollectionDef Collection) BuildEvaluator(float maxHitPointPercentage)
         {
             var referenceTypes = Services.GetAllNamed<IReferenceType>();
@@ -177,7 +208,7 @@ namespace HomebrewDot.Net.RimWorld.DynamicFilters.Tests
             var operatorTypes = Services.GetAllNamed<IOperatorType>();
             var conditionComparator = new Comparator(referenceResolver, operatorTypes);
 
-            var conditions = DynamicFilterPresets.CreateWornEquipmentCondition(maxHitPointPercentage);
+            var conditions = ConvertedConditions(maxHitPointPercentage);
 
             // Re-add the conditions exactly like SimpleFilterPolicy.Provider does.
             var collectionBuilder = new CollectionBuilder();
